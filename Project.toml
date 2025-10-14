@@ -1,7 +1,7 @@
 name = "QuantumFockCore"
 uuid = "c4c52a10-75be-47fa-9298-4f0d724bc661"
 version = "0.2.0"
-authors = ["loulamme "]
+authors = ["Louis Lammertyn"]
 
 [deps]
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
