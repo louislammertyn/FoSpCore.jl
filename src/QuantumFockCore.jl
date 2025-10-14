@@ -1,23 +1,20 @@
-module FockSpace
+module QuantumFockCore
 using LinearAlgebra
 using OrdinaryDiffEq
 using JLD2
-using VectorInterface
-using KrylovKit
-using SparseArrays
 using Plots
-using FFTW
 using IterTools
 using Interpolations
+using SparseArrayKit
 
 
 include("./FockStates.jl")
 include("./FockOps.jl")
 include("./NormalOrder.jl")
 include("./LatticeGeo.jl")
-include("./TimeEv.jl")
-include("./CommonOps.jl")
+include("./OperatorConstruction.jl")
 include("./utils.jl")
+
 #####################################################################################################
 #####################################################################################################
 
@@ -59,18 +56,11 @@ export Lattice_NN_h, vectorise_NN
 #####################################################################################################
 #####################################################################################################
 
-export Time_Evolution, Time_Evolution_TD, schrodinger!, schrodinger_TD!
-
-#####################################################################################################
-#####################################################################################################
-
-export MB_tensor, Entanglement_Entropy, density_onsite, center_of_mass, one_body_ρ, density_flucs, momentum_density
-export Bose_Hubbard_H, two_body_Op, four_body_Op, get_tensor_2body, get_tensor_4body, get_tensor_2body, delta, momentum_space_Op
-
-
-#####################################################################################################
-#####################################################################################################
-
 export delta, nbody_geometry, fill_nbody_tensor, make_index
 export periodic_neighbour, neighbour, helical, helical_periodic
+
+#####################################################################################################
+#####################################################################################################
+
+export ManyBodyTensor, n_body_Op, extract_n_body_tensors
 end

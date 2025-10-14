@@ -18,6 +18,7 @@ end
 
 mutable struct MultipleFockOperator <: AbstractFockOperator
     terms::Vector{FockOperator}
+    cnumber::ComplexF64
 end
 
 # Neutral element structure
@@ -44,13 +45,12 @@ Base.:*(z1::ZeroFockOperator, z2::ZeroFockOperator) = 0
 Base.:*(z::ZeroFockOperator, s::FockOperator) = 0
 Base.:*(s::FockOperator, z::ZeroFockOperator) = 0
 
-######## Pretty printing #########
+############ Pretty Printing ############
 function Base.show(io::IO, op::FockOperator)
     str = op.coefficient == 1 + 0im ? "" : string("($(op.coefficient))", " ⋅ ")
 
-    # Build readable string
     for (site, is_creation) in op.product
-        str *= is_creation ? "cr($site)" : "ann($site)"
+        str *= is_creation ? "a†($site)" : "a($site)"
         str *= " "
     end
 
@@ -58,16 +58,30 @@ function Base.show(io::IO, op::FockOperator)
 end
 
 function Base.show(io::IO, mop::MultipleFockOperator)
-    if isempty(mop.terms)
+    terms_empty = isempty(mop.terms)
+    has_cnumber = mop.cnumber != 0
+
+    if terms_empty && !has_cnumber
         print(io, "0")
         return
     end
 
-    for (i, term) in enumerate(mop.terms)
-        if i > 1
+    shown_any = false
+
+    # print cnumber first if it exists
+    if has_cnumber
+        str = mop.cnumber == 1+0im ? "𝟙" : "($(mop.cnumber)) ⋅ 𝟙"
+        print(io, str)
+        shown_any = true
+    end
+
+    # print operator terms
+    for term in mop.terms
+        if shown_any
             print(io, " + ")
         end
         print(io, term)
+        shown_any = true
     end
 end
 
@@ -79,7 +93,7 @@ Base.size(Op::MultipleFockOperator) = size(Op.terms[1])
 Base.eltype(Op::AbstractFockOperator) = ComplexF64
 
 Base.:+(op1::FockOperator, op2::FockOperator) =
-    op1.product == op2.product ? cleanup_FO(FockOperator(op1.product, op1.coefficient + op2.coefficient, op1.space)) : MultipleFockOperator([op1, op2]);
+    op1.product == op2.product ? cleanup_FO(FockOperator(op1.product, op1.coefficient + op2.coefficient, op1.space)) : MultipleFockOperator([op1, op2], 0. + 0im);
 
 Base.:-(op1::FockOperator, op2::FockOperator) = op1 + FockOperator(op2.product, -op2.coefficient, op2.space)
 
@@ -96,18 +110,26 @@ function Base.:+(op::FockOperator, mop::MultipleFockOperator)
     if !matched
         push!(new_terms, op)
     end
-    return cleanup_FO(MultipleFockOperator(new_terms))
+    
+    return cleanup_FO(MultipleFockOperator(new_terms, mop.cnumber))
 end
+
+Base.:+(mop::MultipleFockOperator, c::Number) = mop.cnumber + c
+Base.:-(mop::MultipleFockOperator, c::Number) = mop.cnumber - c
+Base.:+(c::Number, mop::MultipleFockOperator) = mop.cnumber + c
+Base.:-(c::Number, mop::MultipleFockOperator) = mop.cnumber - c
 
 Base.:+(mop::MultipleFockOperator, op::FockOperator) = op + mop
 Base.:-(mop::MultipleFockOperator, op::FockOperator) = mop + FockOperator(op.product, -op.coefficient, op.space)
 Base.:-(op::FockOperator, mop::MultipleFockOperator) = (-1) * mop + op
+
 
 function Base.:+(mop1::MultipleFockOperator, mop2::MultipleFockOperator)
     result = copy(mop2)
     for t in mop1.terms
         result = result + t
     end
+    result += mop1.cnumber
     return cleanup_FO(result)
 end
 
@@ -118,7 +140,7 @@ Base.:*(op::FockOperator, c::Number) = c * op
 
 function Base.:*(c::Number, mop::MultipleFockOperator)
     new_terms = [c * t for t in mop.terms]
-    return cleanup_FO(MultipleFockOperator(new_terms))
+    return cleanup_FO(MultipleFockOperator(new_terms, c*mop.cnumber))
 end
 
 Base.:*(mop::MultipleFockOperator, c::Number) = c * mop
@@ -136,7 +158,8 @@ function Base.:*(MOp::MultipleFockOperator, Op::FockOperator)
     for O in MOp.terms
         push!(terms, O * Op)
     end
-    return MultipleFockOperator(terms)
+    push!(terms, Op * MOp.cnumber)
+    return MultipleFockOperator(terms, 0.)
 end
 
 function Base.:*(Op::FockOperator, MOp::MultipleFockOperator)
@@ -144,15 +167,19 @@ function Base.:*(Op::FockOperator, MOp::MultipleFockOperator)
     for O in MOp.terms
         push!(terms, Op * O)
     end
-    return MultipleFockOperator(terms)
+    push!(terms, Op * MOp.cnumber)
+    return MultipleFockOperator(terms, 0.)
 end
 
 function Base.:*(MOp1::MultipleFockOperator, MOp2::MultipleFockOperator)
     terms = Vector{FockOperator}()
     for O1 in MOp1.terms, O2 in MOp2.terms
         push!(terms, O1 * O2)
+        push!(terms, O1 * MOp2.cnumber)
+        push!(terms, O2 * MOp1.cnumber)
     end
-    return MultipleFockOperator(terms)
+    
+    return MultipleFockOperator(terms, MOp1.cnumber * MOp2.cnumber)
 end
 
 ########## Utilities ##########
@@ -160,7 +187,7 @@ function Base.copy(op::FockOperator)
     return FockOperator(op.product, op.coefficient, op.space)
 end
 
-Base.copy(mop::MultipleFockOperator) = MultipleFockOperator(copy(mop.terms))
+Base.copy(mop::MultipleFockOperator) = MultipleFockOperator(copy(mop.terms), copy(mop.cnumber))
 
 function cleanup_FO(op::FockOperator)
     return op.coefficient==0. ? ZeroFockOperator() : op
@@ -169,10 +196,8 @@ function cleanup_FO(mop::MultipleFockOperator)
     new_terms = filter(t -> t.coefficient != 0, mop.terms)
     if length(new_terms) == 0
         return ZeroFockOperator()
-    elseif length(new_terms) == 1
-        return new_terms[1]
     else
-        return MultipleFockOperator(new_terms)
+        return MultipleFockOperator(new_terms, mop.cnumber)
     end
 end
 
@@ -195,7 +220,7 @@ function dagger_FO(Ops::MultipleFockOperator)
     for op in Ops.terms
         push!(new_ops, dagger_FO(op))
     end
-    return MultipleFockOperator(new_ops)
+    return MultipleFockOperator(new_ops, Ops.cnumber')
 end
 
 function Base.:*(Op::FockOperator, ket::AbstractFockState)
@@ -216,7 +241,7 @@ function Base.:*(Ops::MultipleFockOperator, ket::AbstractFockState)
         new_ket = new_ket + (Op * ket)
         checkU1(new_ket)
     end
-
+    new_ket += Ops.cnumber * ket
     return new_ket
 end 
 

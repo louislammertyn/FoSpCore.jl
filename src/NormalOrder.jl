@@ -70,11 +70,12 @@ function normal_order(O::FockOperator)
     end
 
     # Cartesian product over sites
-    sites = collect(keys(ordered_per_site))
+    sites = sort(collect(keys(ordered_per_site)))
     site_orderings = [ordered_per_site[site] for site in sites]
 
     # Combine all ordered strings
-    result = ZeroFockOperator()
+    result = MultipleFockOperator([], 0)
+
     for combination in Iterators.product(site_orderings...)
         coeff_factor = c
         creation_part = Tuple{Int, Bool}[]
@@ -92,8 +93,15 @@ function normal_order(O::FockOperator)
             end
         end
 
-        full_ops = vcat(creation_part, annihilation_part)
-        result += FockOperator(Tuple(full_ops), coeff_factor, O.space)
+        if isempty(creation_part) && isempty(annihilation_part)
+            println(coeff_factor)
+            println(result)
+            result.cnumber += coeff_factor
+            println(result)
+        else
+            full_ops = vcat(creation_part, annihilation_part)
+            result += FockOperator(Tuple(full_ops), coeff_factor, O.space)
+        end
     end
 
     return result
@@ -105,6 +113,7 @@ function normal_order(Os::MultipleFockOperator)
     for o in Os.terms
         new_Os += normal_order(o)
     end
+    new_Os.cnumber = Os.cnumber
     return new_Os
 end
 
