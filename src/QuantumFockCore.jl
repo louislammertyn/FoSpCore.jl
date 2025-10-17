@@ -62,5 +62,5 @@ export periodic_neighbour, neighbour, helical, helical_periodic
 #####################################################################################################
 #####################################################################################################
 
-export ManyBodyTensor, n_body_Op, extract_n_body_tensors
+export ManyBodyTensor, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator
 end

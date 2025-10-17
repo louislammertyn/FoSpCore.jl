@@ -25,6 +25,10 @@ end
 struct ZeroFockOperator <: AbstractFockOperator
 end
 
+Base.zero(::Type{FockOperator}) = ZeroFockOperator()
+Base.zero(::Type{MultipleFockOperator}) = ZeroFockOperator()
+
+
 # empty product means identity
 
 function identity_fockoperator(V::AbstractFockSpace, c::ComplexF64=1.0)
