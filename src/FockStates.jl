@@ -362,64 +362,8 @@ a_j(state::ZeroFockState ,j) = ZeroFockState()
 ad_j(state::ZeroFockState ,j) = ZeroFockState() 
 
 
-############## 4. generating states ####################
-
-function all_states_U1(V::U1FockSpace) 
-    N= V.particle_number
-    L = prod(V.geometry)
-    U1occs = bounded_compositions(N, L, V.cutoff)
-    states = Vector{AbstractFockState}()
-    for occ in U1occs
-        push!(states, fock_state(V, occ))
-    end
-    return states
-end
-
-function all_states_U1( V::UnrestrictedFockSpace)
-    states = []
-    ranges = ntuple(_->0:V.cutoff, prod(V.geometry))
-    U1occs = [collect(t) for t in Iterators.product(ranges...)]
-    println(U1occs)
-    for occ in U1occs
-        push!(states, fock_state(V, occ))
-    end
-    return states
-end
-
-
-function bounded_compositions(N::Int, L::Int, cutoff::Int; thread_threshold::Int=10_000)
-    cutoff += 1
-    max_i = cutoff^L  
-    
-    if max_i < thread_threshold || Threads.nthreads() == 1
-        # ---------------- Single-threaded version ----------------
-        results = Vector{Vector{Int}}()
-        for i in 0:max_i-1
-            n = digits(i, base=cutoff)
-            if sum(n) == N && length(n) <= L
-                push!(results, reverse(n))
-            end
-        end
-    else
-        # ---------------- Multithreaded version ----------------
-        thread_results = [Vector{Vector{Int}}() for _ in 1:Threads.nthreads()]
-        Threads.@threads for i in 0:max_i-1
-            n = digits(i, base=cutoff)
-            if sum(n) == N && length(n) <= L
-                push!(thread_results[Threads.threadid()], reverse(n))
-            end
-        end
-        results = reduce(vcat, thread_results)
-    end
-
-    # Padding & sorting (shared by both paths)
-    padded = results .|> x -> vcat(zeros(Int, L - length(x)), x)
-    sorted = sort(padded, by=x -> evalpoly(cutoff, x), rev=true)
-    return sorted
-end
-
-
 function create_MFS(coefficients::Vector{ComplexF64}, states::Vector{AbstractFockState})
+    @assert length(coefficients)==length(states)
     total_state = ZeroFockState()
     for (i,c) in enumerate(coefficients)
         state = states[i] * (1/states[i].coefficient)

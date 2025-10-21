@@ -19,6 +19,9 @@ function ManyBodyTensor(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::
     tensor_rank = N * D               # total number of indices
     tensor_size = repeat(collect(V.geometry), N) |> Tuple
     tensor = SparseArray{T, tensor_rank}(undef, tensor_size)
+    if typeof(V)==U1FockSpace
+        @assert domain==codomain "U1 symmetry is not respected with this tensor"
+    end
     return ManyBodyTensor{T, tensor_rank}(tensor, V, domain, codomain)
 end
 

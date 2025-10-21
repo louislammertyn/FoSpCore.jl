@@ -1,18 +1,19 @@
 ####### functions of common operations in these calculations ########
 
 begin
-
-
-
 nbody_geometry(geometry::Tuple, n::Int) = (n==1) ? geometry : ( geometry |> collect |> g-> repeat(g,n) |> Tuple)
     
 delta(i::Int,j::Int) = (i==j) ? true : false
 
 make_index(site_tuple::NTuple{N, NTuple{D, Int}}) where {D,N} = site_tuple |> collect .|> collect |> s -> vcat(s...) 
 
-function fill_nbody_tensor(V::U1FockSpace, lattice::Lattice, n::Int, fillingconditions::Tuple ; onlyNN=false)
-    n_geo = nbody_geometry(V.geometry, n)
-    tensor = zeros(ComplexF64, n_geo)
+
+#### Helper function to fill in ManyBodyTensor types for operator construction
+function fill_nbody_tensor(t_init::ManyBodyTensor, lattice::Lattice, fillingconditions::Tuple )
+    V = t_init.V
+    n = t_init.domain + t_init.codomain
+    
+    tensor = t_init.tensor
 
     sites = keys(lattice.sites)
 
@@ -23,15 +24,9 @@ function fill_nbody_tensor(V::U1FockSpace, lattice::Lattice, n::Int, fillingcond
 
             ind = make_index(s_tuple)
 
-            s_rev = reverse(s_tuple)
-            ind_rev = make_index(s_rev)
-
-            tensor[ind...] = value
-            tensor[ind_rev...] = conj(value)
-            
+            tensor[ind...] = value 
         end
     end
-
     return tensor
 end
 

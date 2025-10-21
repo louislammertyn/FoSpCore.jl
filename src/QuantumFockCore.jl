@@ -1,8 +1,5 @@
 module QuantumFockCore
 using LinearAlgebra
-using OrdinaryDiffEq
-using JLD2
-using Plots
 using IterTools
 using Interpolations
 using SparseArrayKit
