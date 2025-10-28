@@ -27,7 +27,7 @@ function fill_nbody_tensor(t_init::ManyBodyTensor, lattice::Lattice, fillingcond
             tensor[ind...] = value 
         end
     end
-    return tensor
+    return t_init
 end
 
 ####### different conditions for periodic boundary conditions on NN hopping #######

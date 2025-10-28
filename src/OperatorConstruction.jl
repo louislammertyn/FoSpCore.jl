@@ -13,16 +13,36 @@ Base.size(M::ManyBodyTensor) = size(M.tensor)
 Base.getindex(M::ManyBodyTensor, I...) = M.tensor[I...]
 Base.IndexStyle(M::ManyBodyTensor) = IndexStyle(M.tensor)
 
-function ManyBodyTensor(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::Int) where {T}
+function ManyBodyTensor(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::Int; v=false) where {T}
     N = domain + codomain             # number of modes
     D = length(V.geometry)            # number of indices per mode
-    tensor_rank = N * D               # total number of indices
-    tensor_size = repeat(collect(V.geometry), N) |> Tuple
+    if v
+        tensor_rank = N
+        tensor_size = ntuple(_->prod(V.geometry), N)
+    else
+        tensor_rank = N * D               # total number of indices
+        tensor_size = repeat(collect(V.geometry), N) |> Tuple
+    end
     tensor = SparseArray{T, tensor_rank}(undef, tensor_size)
     if typeof(V)==U1FockSpace
         @assert domain==codomain "U1 symmetry is not respected with this tensor"
     end
     return ManyBodyTensor{T, tensor_rank}(tensor, V, domain, codomain)
+end
+function ManyBodyTensor(t::SparseArray{T,N}, V::AbstractFockSpace, domain::Int, codomain::Int) where {T,N}
+    v = (domain+codomain==N) ? true : false
+    t_ = ManyBodyTensor(T, V, domain, codomain; v=v)
+    t_.tensor .= t
+    return t_
+end
+
+
+# similar for ManyBodyTensor
+function Base.similar(M::ManyBodyTensor{T,N}, ::Type{S}=T) where {T,N,S}
+    # create a sparse array of the same size as the underlying tensor
+    new_tensor = spzeros(S, size(M.tensor))
+    # return a new ManyBodyTensor with the same Fock space, domain, codomain
+    return ManyBodyTensor{S,N}(new_tensor, M.V, M.domain, M.codomain)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", MBT::ManyBodyTensor)
@@ -35,11 +55,7 @@ function Base.show(io::IO, ::MIME"text/plain", MBT::ManyBodyTensor)
     if nnz_entries == 0
         println(io, "  (all entries are zero)")
     else
-        println(io, "  nonzero entries:")
-        for (idx, val) in pairs(MBT.tensor)
-            println(io, "    ", Tuple(idx), " => ", val)
-        end
-        println(io, "  total nonzeros: ", nnz_entries)
+        println(io, "  total nonzeros: ", nnz_entries, " or ", round(nnz_entries / length(MBT.tensor);digits=3), "%")
     end
 end
 
@@ -84,9 +100,7 @@ function n_body_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTenso
 
         if !iszero(coeff)
             # Pair each site with its corresponding creation/annihilation boolean
-            
             op_tuple = [(combo[i], i<= tensor.codomain) for i in 1:N] |> Tuple
-            println(op_tuple)
             Op += FockOperator(op_tuple, coeff, V)
         end
     end
@@ -133,4 +147,59 @@ end
 function construct_Multiple_Operator(V::AbstractFockSpace, lattice::Lattice, tensors::Vector{ManyBodyTensor})
     return sum([n_body_Op(V, lattice, t) for t in tensors])
 end
+
+function vectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
+    mapping = lattice.sites
+    # Get old tensor and size
+    old_tensor = M.tensor
+    old_size = size(old_tensor)
+    D = length(M.V.geometry)
+
+    # Determine new tensor size
+    # assume mapping contains all possible multi-indices
+    new_size = prod(M.V.geometry)
+    new_rank = M.domain + M.codomain
+
+    new_tensor = SparseArray{T, new_rank}(undef, ntuple(_->new_size, new_rank)) 
+
+    # Iterate over all stored entries in sparse tensor
+    for I in keys(old_tensor)
+        site_tuples = split_tuple(Tuple(I), D)
+        new_index = [mapping[s] for s in site_tuples]           # map multi-index to vectorized index
+        new_tensor[new_index...] = old_tensor[I]                # match values
+    end
+
+    return ManyBodyTensor{T,new_rank}(new_tensor, M.V, M.domain, M.codomain)
+end
+
+function split_tuple(t::NTuple{N, T}, chunk::Int) where {N, T}
+    @assert N % chunk == 0 "Tuple length must be divisible by chunk size"
+    return ntuple(i -> t[(chunk*(i-1)+1):(chunk*i)], N ÷ chunk)
+end
+
+function devectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
+    # Invert the mapping: α -> site tuple
+    inv_mapping = lattice.sites_v
+
+    # Old tensor and rank
+    old_tensor = M.tensor
+    D = length(M.V.geometry)  # dimension of each site
+
+    # Size for the new tensor (lattice indices)
+    tensor_rank = M.domain + M.codomain
+    site_size = M.V.geometry
+    new_size = repeat(collect(site_size), N) |> Tuple
+    new_tensor = SparseArray{T, length(new_size)}(undef, new_size)
+
+    # Iterate over stored entries in the vectorized tensor
+    for I in keys(old_tensor)
+        # I is a tuple of vectorized indices
+        site_tuples = [collect(inv_mapping[i]) for i in Tuple(I)]          # map each α back to site tuple
+        lattice_indices = reduce(vcat, site_tuples)        # flatten into a single tuple
+        new_tensor[lattice_indices...] = old_tensor[I]     # copy value
+    end
+
+    return ManyBodyTensor(new_tensor, M.V, M.domain, M.codomain)
+end
+
 

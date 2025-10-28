@@ -18,7 +18,7 @@ include("./utils.jl")
 
 export AbstractFockSpace, U1FockSpace, UnrestrictedFockSpace,
        AbstractFockState, FockState, MultipleFockState, ZeroFockState
-export fock_state, copy, cleanup_FS, checkU1, basisFS
+export fock_state, copy, cleanup_FS, checkU1
 export a_j, ad_j
 export norm2FS
 export  create_MFS, dot
@@ -57,5 +57,5 @@ export periodic_neighbour, neighbour, helical, helical_periodic
 #####################################################################################################
 #####################################################################################################
 
-export ManyBodyTensor, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator
+export ManyBodyTensor, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
 end

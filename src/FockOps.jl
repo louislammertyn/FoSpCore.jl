@@ -35,10 +35,14 @@ function identity_fockoperator(V::AbstractFockSpace, c::ComplexF64=1.0)
     FockOperator(NTuple{0, Tuple{Int,Bool}}() , c, V) 
 end
 
+Base.:+(z::ZeroFockOperator, c::Number) = z
+Base.:+(c::Number, z::ZeroFockOperator) = z
 Base.:+(z::ZeroFockOperator, s::FockOperator) = s
 Base.:+(s::FockOperator, z::ZeroFockOperator) = s
 Base.:+(z::ZeroFockOperator, ms::MultipleFockOperator) = ms
 Base.:+(ms::MultipleFockOperator, z::ZeroFockOperator) = ms
+Base.:-(z::ZeroFockOperator, c::Number) = z
+Base.:-(c::Number, z::ZeroFockOperator) = z
 Base.:-(z::ZeroFockOperator, s::FockOperator) = -1 *s
 Base.:-(s::FockOperator, z::ZeroFockOperator) = s
 Base.:-(z::ZeroFockOperator, ms::MultipleFockOperator) =-1* ms
@@ -118,10 +122,10 @@ function Base.:+(op::FockOperator, mop::MultipleFockOperator)
     return cleanup_FO(MultipleFockOperator(new_terms, mop.cnumber))
 end
 
-Base.:+(mop::MultipleFockOperator, c::Number) = mop.cnumber + c
-Base.:-(mop::MultipleFockOperator, c::Number) = mop.cnumber - c
-Base.:+(c::Number, mop::MultipleFockOperator) = mop.cnumber + c
-Base.:-(c::Number, mop::MultipleFockOperator) = mop.cnumber - c
+Base.:+(mop::MultipleFockOperator, c::Number) = (mop.cnumber += c; return mop)
+Base.:-(mop::MultipleFockOperator, c::Number) =(mop.cnumber -= c; return mop)
+Base.:+(c::Number, mop::MultipleFockOperator) = (mop.cnumber += c; return mop)
+Base.:-(c::Number, mop::MultipleFockOperator) = (mop.cnumber *= -1; mop.cnumber += c; return mop)
 
 Base.:+(mop::MultipleFockOperator, op::FockOperator) = op + mop
 Base.:-(mop::MultipleFockOperator, op::FockOperator) = mop + FockOperator(op.product, -op.coefficient, op.space)

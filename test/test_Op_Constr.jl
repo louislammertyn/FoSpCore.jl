@@ -62,5 +62,41 @@ end
     @test tensor2.tensor[ci2] == 3.0 + 0im
 end
 
-O = FockOperator(((1,false), (1, true)), 1., V)
-normal_order(O)
+# --------------------------------------------------
+# TEST 4: Convert between vectorised and non vectorised tensors
+# --------------------------------------------------
+function randn_sparse(T::Type{<:Number}, sz::Dims, p=0.5)
+    a = SparseArray{T}(undef, sz)
+    for I in keys(a)
+        if rand() < p
+            a[I] = randn(T)
+        end
+    end
+    return a
+end
+
+@testset "extract_n_body_tensors" begin
+    V = U1FockSpace((2,3), 3, 3)
+    lattice = Lattice((2,3))
+    t = ManyBodyTensor(ComplexF64, V, 4, 3)
+    t.tensor .= randn_sparse(ComplexF64, Tuple(repeat([2,3], 7)), 0.5)
+
+    t_v = vectorize_tensor(t, lattice)
+    @test t.tensor == devectorize_tensor(t_v, lattice)
+
+    V = U1FockSpace((3,2), 3, 3)
+    lattice = Lattice((3,2))
+    tensor = randn_sparse(ComplexF64, Tuple(repeat([6], 7)), 0.5)
+
+    t_v = ManyBodyTensor(tensor, V, 3, 4)
+    t = devectorise_tensor(t_v, lattice)
+    @test t_v.tensor == vectorize_tensor(t, lattice) 
+end
+
+V = U1FockSpace((2,3), 3, 3)
+lattice = Lattice((2,3))
+t = ManyBodyTensor(ComplexF64, V, 4, 3)
+t.tensor .= randn_sparse(ComplexF64, Tuple(repeat([2,3], 7)), 0.5)
+t
+t_v = vectorize_tensor(t, lattice)
+@test t.tensor == devectorize_tensor(t_v, lattice)

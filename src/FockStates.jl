@@ -33,22 +33,7 @@ end
 dimension(ufs::U1FockSpace) = prod(ufs.geometry) * (min(ufs.cutoff, ufs.particle_number))
 dimension(ufs::UnrestrictedFockSpace) = prod(ufs.geometry) * ufs.cutoff
 
-function basisFS(space::U1FockSpace; nodata=false, savedata=false)
-    savename = "basis_u1_geom=$(join(space.geometry, 'x'))_cutoff=$(space.cutoff)_N=$(space.particle_number).jld2"
-    if  (savename ∈ readdir("./src/assets/states")) & !nodata
-        data = load("./src/assets/states/$savename")
-        return data["states"]
 
-    elseif !(savename ∈ readdir("./src/assets/states")) & savedata
-        states = all_states_U1(space)
-        save("./src/assets/states/$savename", Dict("states"=>states))
-        return states
-
-    elseif !(savename ∈ readdir("./src/assets/states")) 
-        return all_states_U1(space)
-    end
-
-end
 
 abstract type AbstractFockState end
 
