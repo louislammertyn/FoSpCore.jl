@@ -3,7 +3,7 @@
 begin
 nbody_geometry(geometry::Tuple, n::Int) = (n==1) ? geometry : ( geometry |> collect |> g-> repeat(g,n) |> Tuple)
     
-delta(i::Int,j::Int) = (i==j) ? true : false
+delta(i::Int,j::Int) = (i==j)
 
 make_index(site_tuple::NTuple{N, NTuple{D, Int}}) where {D,N} = site_tuple |> collect .|> collect |> s -> vcat(s...) 
 
@@ -41,31 +41,18 @@ function neighbour(s1::NTuple{D, Int}, s2::NTuple{D, Int}, dim::Int) where {D}
 end
 
 function periodic_neighbour(s1::NTuple{D, Int}, s2::NTuple{D, Int},
-                            dims::NTuple{D, Bool}, geometry::NTuple{D, Int}) where {D}
-    diff_count = 0
+                            dim::Int, lattice::Lattice) where {D}
+    
+    nns = lattice.NN
+    !(s1 ∈ nns[s2]) && return false
 
-    for d in 1:D
-        if dims[d]  # periodic dimension
-            δ = mod(s2[d] - s1[d] + geometry[d] ÷ 2, geometry[d]) - geometry[d] ÷ 2
-            if abs(δ) == 1 & (!neighbour(s1, s2, findfirst(x->true, dims)) & !neighbour(s2, s1, findfirst(x->true, dims)))
-                diff_count += 1
-            elseif δ != 0
-                return false  # differ by more than 1 in a periodic dim
-            end
-        else
-            # non-periodic dimension must match exactly
-            if s1[d] != s2[d]
-                return false
-            end
-        end
-    end
+    δ = mod(s2[dim] - s1[dim], lattice.geometry[dim])
 
-    return diff_count == 1
+    return δ == 1 
 end
 
-    
 
-function helical(s1::Tuple{Int, Int}, s2::Tuple{Int, Int}, dim::Int, L::Int)
+function helical_neighbour(s1::Tuple{Int, Int}, s2::Tuple{Int, Int}, dim::Int, L::Int)
     dim_ = mod(dim, 2) + 1
     return delta(s1[dim] , L ) * delta(s2[dim],1) * delta(s1[dim_],s2[dim_]-1)
 end

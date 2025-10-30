@@ -52,7 +52,7 @@ export Lattice_NN_h, vectorise_NN
 #####################################################################################################
 
 export delta, nbody_geometry, fill_nbody_tensor, make_index
-export periodic_neighbour, neighbour, helical, helical_periodic
+export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 
 #####################################################################################################
 #####################################################################################################

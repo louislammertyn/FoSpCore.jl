@@ -38,7 +38,6 @@ function transform(O::MultipleFockOperator, lattice::Lattice, modes::Matrix{Comp
 
     for t_ in tnsrs
         t_v = vectorize_tensor(t_, lattice)
-        new_t = similar(t_v)
 
         dom = t_.domain
         codom = t_.codomain
