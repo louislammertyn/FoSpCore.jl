@@ -202,4 +202,81 @@ function devectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N
     return ManyBodyTensor(new_tensor, M.V, M.domain, M.codomain)
 end
 
+"""
+This functionality implements operator transformations under either:
+
+1. Projections onto a subset of the total single particle Hilbert space, or
+2. Full unitary basis transformations on the many-body Fock operators.
+
+The transformations are of the form:
+
+    d†_α = Σ_i ϕ_i^α c†_i
+
+where ϕ_i^α=⟨i|ϕ^α⟩ are either:
+
+- The eigenstates |ϕ^α⟩ defining the subspace onto which one projects where one 
+  then assumes the projection on the subspace as c†_i ≈ Σ_α (ϕ_i^α)*d†_α, or
+- If they form an orthonormal set, the basis functions into which the Fock operators are transformed.
+
+The matrix encoding the projection or transformation is denoted as:
+
+    M_αi = φ_i^α
+
+Please note the the i index labels the vectorised modes of the system and α labels the eigenstates |ϕ^α>
+"""
+
+function transform(O::MultipleFockOperator, lattice::Lattice, modes::Matrix{ComplexF64})
+    if size(modes,1) == size(modes,2)
+        @assert isapprox(modes * modes', I, atol=1e-12)
+    end
+
+    V = O.space
+    new_geometry = (size(modes,1),)
+    if typeof(V) == UnrestrictedFockSpace
+        new_V = UnrestrictedFockSpace(new_geometry, V.cutoff)
+        new_lattice = Lattice(new_geometry)
+    elseif typeof(V) == U1FockSpace
+        new_V = U1FockSpace(new_geometry, V.cutoff, V.particle_number)
+        new_lattice = Lattice(new_geometry)
+    end
+
+    tnsrs = extract_n_body_tensors(O, lattice)
+    new_tnsrs = Vector{ManyBodyTensor}()
+
+    for t_ in tnsrs
+        t_v = vectorize_tensor(t_, lattice).tensor
+
+        dom = t_.domain
+        codom = t_.codomain
+        N = dom + codom
+
+        # build index strings
+        old_tensor_indices = 1:N
+        new_tensor_indices = -1 .* (1:N)
+
+        tnsrs_prod = Vector{SparseArray}()
+        indices = Vector{Vector{Int64}}()
+        modes_sp = SparseArray(modes)
+
+        for i in 1:dom 
+            push!(tnsrs_prod, modes_sp)
+            push!(indices, [new_tensor_indices[i], old_tensor_indices[i]])
+        end
+        for i in dom+1:N
+            push!(tnsrs_prod, conj.(modes_sp))
+            push!(indices, [new_tensor_indices[i], old_tensor_indices[i]])
+        end
+        push!(tnsrs_prod, t_v)
+        push!(indices, old_tensor_indices)
+
+        t_new_v = ncon(Tuple(tnsrs_prod), Tuple(indices))
+        t_new_v = ManyBodyTensor(t_new_v, new_V, dom, codom)
+        push!(new_tnsrs, t_new)
+
+    end
+
+    return construct_Multiple_Operator(new_V, new_lattice, new_tnsrs)
+end
+
+
 
