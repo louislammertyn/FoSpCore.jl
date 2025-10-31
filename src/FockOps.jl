@@ -35,6 +35,8 @@ function identity_fockoperator(V::AbstractFockSpace, c::ComplexF64=1.0)
     FockOperator(NTuple{0, Tuple{Int,Bool}}() , c, V) 
 end
 
+Base.:+(z::ZeroFockOperator, z2::ZeroFockOperator) = z
+Base.:-(z::ZeroFockOperator, z2::ZeroFockOperator) = z
 Base.:+(z::ZeroFockOperator, c::Number) = z
 Base.:+(c::Number, z::ZeroFockOperator) = z
 Base.:+(z::ZeroFockOperator, s::FockOperator) = s
@@ -201,7 +203,7 @@ function cleanup_FO(op::FockOperator)
     return op.coefficient==0. ? ZeroFockOperator() : op
 end
 function cleanup_FO(mop::MultipleFockOperator)
-    new_terms = filter(t -> t.coefficient != 0, mop.terms)
+    new_terms = filter(t -> !isapprox(abs2(t.coefficient), 0; atol=1e-15), mop.terms)
     if length(new_terms) == 0
         return ZeroFockOperator()
     else

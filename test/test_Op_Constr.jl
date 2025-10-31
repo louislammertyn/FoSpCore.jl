@@ -10,12 +10,13 @@ lattice = Lattice((2,3))
 # TEST 1: ManyBodyTensor construction and indexing
 # --------------------------------------------------
 @testset "ManyBodyTensor basics" begin
-    MBT = ManyBodyTensor(ComplexF64, V, 2, 1)  # 2 annihilation, 1 creation
+    MBT = ManyBodyTensor_init(ComplexF64, V, 2, 1)  # 2 annihilation, 1 creation
 
     @test isa(MBT, AbstractArray)
     @test size(MBT) == (2,3,2,3,2,3)  # N=3 copies of D=2
     MBT.tensor[CartesianIndex(1,1,1,1,1,1)] = 1.0 + 0im
     @test MBT[1,1,1,1,1,1] == 1.0 + 0im
+    @test MBT == MBT
 end
 
 # --------------------------------------------------
@@ -79,9 +80,11 @@ end
     V = U1FockSpace((2,3), 3, 3)
     lattice = Lattice((2,3))
     t = ManyBodyTensor(ComplexF64, V, 4, 3)
+
     t.tensor .= randn_sparse(ComplexF64, Tuple(repeat([2,3], 7)), 0.5)
 
     t_v = vectorize_tensor(t, lattice)
+    @test t_v.tensor == vectorize_tensor(t_v, lattice)
     @test t.tensor == devectorize_tensor(t_v, lattice)
 
     V = U1FockSpace((3,2), 3, 3)
@@ -91,5 +94,47 @@ end
     t_v = ManyBodyTensor(tensor, V, 3, 4)
     t = devectorize_tensor(t_v, lattice)
     @test t_v.tensor == vectorize_tensor(t, lattice) 
+
+    
 end
 
+# --------------------------------------------------
+# TEST 5: basistransformation
+# --------------------------------------------------
+L = 5
+V = U1FockSpace((L,L), 1, 1)
+lattice = Lattice((L,L); periodic=(true,true))
+j = 0:L-1
+k = 0:L-1
+U =  fourier_2d_matrix(L,L, lattice.sites)
+function nn(sites_tuple)
+    s1, s2 = sites_tuple
+    return periodic_neighbour(s1, s2, 1, lattice, (L,L)) | periodic_neighbour(s2, s1, 1, lattice, (L,L))  |periodic_neighbour(s1, s2, 2, lattice, (L,L)) | periodic_neighbour(s2, s1, 2, lattice, (L,L))  
+end
+
+J = ManyBodyTensor_init(ComplexF64, V, 1, 1)
+
+J = fill_nbody_tensor(J, lattice, (nn,))
+J
+H = n_body_Op(V, lattice, J)
+H_ =transform(H, lattice, U)
+length(H_.terms)
+function fourier_2d_matrix(Lx::Int, Ly::Int, site_to_vec::Dict{Tuple, Int})
+    U = zeros(ComplexF64, Lx*Ly, Lx*Ly)
+
+    # momentum indices (0-based)
+    kx_vals = 0:Lx-1
+    ky_vals = 0:Ly-1
+
+    for x in 1:Lx
+        for y in 1:Ly
+            vec_idx = site_to_vec[(x,y)]
+            for (kx, ky) in Iterators.product(kx_vals, ky_vals)
+                momentum_idx = kx*Ly + ky + 1  # flattened momentum index
+                U[momentum_idx, vec_idx] = exp(-2im * π * ((x-1)*kx/Lx + (y-1)*ky/Ly)) / sqrt(Lx*Ly)
+            end
+        end
+    end
+
+    return U
+end

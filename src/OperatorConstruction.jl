@@ -6,14 +6,25 @@ struct ManyBodyTensor{T, N} <: AbstractArray{T, N}
     V::AbstractFockSpace       # the fixed Fock space
     domain::Int                # number of copies in domain (annihilation)
     codomain::Int              # number of copies in codomain (creation)
+
+    function ManyBodyTensor(tensor::SparseArray{T, N}, V::AbstractFockSpace,
+                            domain::Int, codomain::Int) where {T, N}
+
+        new{T, N}(tensor, V, domain, codomain)
+    end
 end
 
 # array interface
 Base.size(M::ManyBodyTensor) = size(M.tensor)
 Base.getindex(M::ManyBodyTensor, I...) = M.tensor[I...]
 Base.IndexStyle(M::ManyBodyTensor) = IndexStyle(M.tensor)
+==(M1::ManyBodyTensor, M2::ManyBodyTensor) = (M1.tensor == M2.tensor &&
+                                                    M1.V == M2.V &&
+                                                    M1.domain == M2.domain &&
+                                                    M1.codomain == M2.codomain)
 
-function ManyBodyTensor(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::Int; v=false) where {T}
+
+function ManyBodyTensor_init(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::Int; v=false) where {T}
     N = domain + codomain             # number of modes
     D = length(V.geometry)            # number of indices per mode
     if v
@@ -27,14 +38,9 @@ function ManyBodyTensor(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::
     if typeof(V)==U1FockSpace
         @assert domain==codomain "U1 symmetry is not respected with this tensor"
     end
-    return ManyBodyTensor{T, tensor_rank}(tensor, V, domain, codomain)
+    return ManyBodyTensor(tensor, V, domain, codomain)
 end
-function ManyBodyTensor(t::SparseArray{T,N}, V::AbstractFockSpace, domain::Int, codomain::Int) where {T,N}
-    v = (domain+codomain==N) ? true : false
-    t_ = ManyBodyTensor(T, V, domain, codomain; v=v)
-    t_.tensor .= t
-    return t_
-end
+
 
 
 # similar for ManyBodyTensor
@@ -87,17 +93,17 @@ function n_body_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTenso
     map_v_s = lattice.sites_v
     sites = collect(keys(map_v_s))
     Op = ZeroFockOperator()
+    
     iszero(tensor.tensor) && return Op
 
     # Generate all combinations of N sites
     site_combinations = Iterators.product(ntuple(_->sites, N)...)
 
     for combo in site_combinations
-    # Flatten the indices for the N-body tensor
-    inds_flat = reduce(vcat, (collect(map_v_s[s]) for s in combo)) |> Tuple
-    ci = CartesianIndex(inds_flat)    # convert to CartesianIndex
-    coeff = tensor.tensor[ci]         # access the sparse tensor
-
+        # Flatten the indices for the N-body tensor
+        inds_flat = reduce(vcat, (collect(map_v_s[s]) for s in combo)) |> Tuple
+        ci = CartesianIndex(inds_flat)    # convert to CartesianIndex
+        coeff = tensor.tensor[ci]         # access the sparse tensor
         if !iszero(coeff)
             # Pair each site with its corresponding creation/annihilation boolean
             op_tuple = [(combo[i], i<= tensor.codomain) for i in 1:N] |> Tuple
@@ -131,7 +137,7 @@ function extract_n_body_tensors(O::MultipleFockOperator, lattice::Lattice)
     # For each type construct a ManyBodyTensor
     Nbody_tensors = Vector{ManyBodyTensor}()
     for ((domain, codomain), ops_list) in Operator_type_dict
-        tensor = ManyBodyTensor(ComplexF64, V, domain, codomain)
+        tensor = ManyBodyTensor_init(ComplexF64, V, domain, codomain)
         for op in ops_list
             # Flatten all site indices and convert to CartesianIndex
             inds_flat = reduce(vcat, (collect(map_v_s[b[1]]) for b in op.product)) |> Tuple
@@ -154,6 +160,7 @@ function vectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
     old_tensor = M.tensor
     old_size = size(old_tensor)
     D = length(M.V.geometry)
+    old_size == (M.domain + M.codomain) && return M
 
     # Determine new tensor size
     # assume mapping contains all possible multi-indices
@@ -169,7 +176,7 @@ function vectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
         new_tensor[new_index...] = old_tensor[I]                # match values
     end
 
-    return ManyBodyTensor{T,new_rank}(new_tensor, M.V, M.domain, M.codomain)
+    return ManyBodyTensor(new_tensor, M.V, M.domain, M.codomain)
 end
 
 function split_tuple(t::NTuple{N, T}, chunk::Int) where {N, T}
@@ -191,6 +198,9 @@ function devectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N
     new_size = repeat(collect(site_size), N) |> Tuple
     new_tensor = SparseArray{T, length(new_size)}(undef, new_size)
 
+    # to ensure idempotent property
+    (D * tensor_rank == length(size(M.tensor))) && return M
+
     # Iterate over stored entries in the vectorized tensor
     for I in keys(old_tensor)
         # I is a tuple of vectorized indices
@@ -202,81 +212,11 @@ function devectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N
     return ManyBodyTensor(new_tensor, M.V, M.domain, M.codomain)
 end
 
-"""
-This functionality implements operator transformations under either:
 
-1. Projections onto a subset of the total single particle Hilbert space, or
-2. Full unitary basis transformations on the many-body Fock operators.
 
-The transformations are of the form:
 
-    d†_α = Σ_i ϕ_i^α c†_i
 
-where ϕ_i^α=⟨i|ϕ^α⟩ are either:
 
-- The eigenstates |ϕ^α⟩ defining the subspace onto which one projects where one 
-  then assumes the projection on the subspace as c†_i ≈ Σ_α (ϕ_i^α)*d†_α, or
-- If they form an orthonormal set, the basis functions into which the Fock operators are transformed.
-
-The matrix encoding the projection or transformation is denoted as:
-
-    M_αi = φ_i^α
-
-Please note the the i index labels the vectorised modes of the system and α labels the eigenstates |ϕ^α>
-"""
-
-function transform(O::MultipleFockOperator, lattice::Lattice, modes::Matrix{ComplexF64})
-    if size(modes,1) == size(modes,2)
-        @assert isapprox(modes * modes', I, atol=1e-12)
-    end
-
-    V = O.space
-    new_geometry = (size(modes,1),)
-    if typeof(V) == UnrestrictedFockSpace
-        new_V = UnrestrictedFockSpace(new_geometry, V.cutoff)
-        new_lattice = Lattice(new_geometry)
-    elseif typeof(V) == U1FockSpace
-        new_V = U1FockSpace(new_geometry, V.cutoff, V.particle_number)
-        new_lattice = Lattice(new_geometry)
-    end
-
-    tnsrs = extract_n_body_tensors(O, lattice)
-    new_tnsrs = Vector{ManyBodyTensor}()
-
-    for t_ in tnsrs
-        t_v = vectorize_tensor(t_, lattice).tensor
-
-        dom = t_.domain
-        codom = t_.codomain
-        N = dom + codom
-
-        # build index strings
-        old_tensor_indices = 1:N
-        new_tensor_indices = -1 .* (1:N)
-
-        tnsrs_prod = Vector{SparseArray}()
-        indices = Vector{Vector{Int64}}()
-        modes_sp = SparseArray(modes)
-
-        for i in 1:dom 
-            push!(tnsrs_prod, modes_sp)
-            push!(indices, [new_tensor_indices[i], old_tensor_indices[i]])
-        end
-        for i in dom+1:N
-            push!(tnsrs_prod, conj.(modes_sp))
-            push!(indices, [new_tensor_indices[i], old_tensor_indices[i]])
-        end
-        push!(tnsrs_prod, t_v)
-        push!(indices, old_tensor_indices)
-
-        t_new_v = ncon(Tuple(tnsrs_prod), Tuple(indices))
-        t_new_v = ManyBodyTensor(t_new_v, new_V, dom, codom)
-        push!(new_tnsrs, t_new)
-
-    end
-
-    return construct_Multiple_Operator(new_V, new_lattice, new_tnsrs)
-end
 
 
 

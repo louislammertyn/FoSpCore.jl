@@ -3,6 +3,7 @@ using LinearAlgebra
 using IterTools
 using Interpolations
 using SparseArrayKit
+using TensorOperations
 
 
 include("./FockStates.jl")
@@ -57,6 +58,6 @@ export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 #####################################################################################################
 #####################################################################################################
 
-export ManyBodyTensor, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
+export ManyBodyTensor, ManyBodyTensor_init, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
 export transform
 end

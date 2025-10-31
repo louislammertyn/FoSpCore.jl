@@ -41,12 +41,12 @@ function neighbour(s1::NTuple{D, Int}, s2::NTuple{D, Int}, dim::Int) where {D}
 end
 
 function periodic_neighbour(s1::NTuple{D, Int}, s2::NTuple{D, Int},
-                            dim::Int, lattice::Lattice) where {D}
+                            dim::Int, lattice::Lattice, geometry::Tuple) where {D}
     
     nns = lattice.NN
     !(s1 ∈ nns[s2]) && return false
 
-    δ = mod(s2[dim] - s1[dim], lattice.geometry[dim])
+    δ = mod(s2[dim] - s1[dim], geometry[dim])
 
     return δ == 1 
 end

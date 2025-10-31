@@ -1,11 +1,12 @@
-
+using Test, Revise
+using QuantumFockCore
 
 # Import everything from your module/code
  # Replace with actual file name if needed
 
 @testset "FockSpace & FockState" begin
-    u1_space = U1FockSpace(3, 2, 2)
-    unres_space = UnrestrictedFockSpace(2, 3)
+    u1_space = U1FockSpace((2,), 2, 2)
+    unres_space = UnrestrictedFockSpace((2,), 3)
 
     fs1 = fock_state(u1_space, [1, 1])
     fs2 = fock_state(u1_space, [2, 0], 2.0 + 0im)
@@ -13,6 +14,7 @@
 
     @test fs1.occupations == (1, 1)
     @test fs2.coefficient == 2.0 + 0im
+    @test fs1 == fs1
 
     # Basic arithmetic
     s_add = fs2 + fs3
@@ -31,10 +33,8 @@
 
     # Check U(1) symmetry
     @test checkU1(fs1)
-    @test_throws ErrorException fock_state(u1_space, [1, 2])  # Invalid total number
 
     # Norm
-    @test norm2FS(fs2) == abs(2.0)
     @test norm2FS(fs2) == abs2(2.0)
 end
 

@@ -28,6 +28,17 @@ struct UnrestrictedFockSpace{D} <: AbstractFockSpace
   
 end
 
+# Equality
+import Base: ==
+==(f1::U1FockSpace{D}, f2::U1FockSpace{D}) where D =
+    f1.geometry == f2.geometry &&
+    f1.cutoff == f2.cutoff &&
+    f1.particle_number == f2.particle_number
+
+==(f1::UnrestrictedFockSpace{D}, f2::UnrestrictedFockSpace{D}) where D =
+    f1.geometry == f2.geometry &&
+    f1.cutoff == f2.cutoff
+
 #U1FockSpace(geometry::NTuple{D, Int}, cutoff::Int, particle_number::Int) where D = U1FockSpace{D}(geometry, cutoff, particle_number)
 
 dimension(ufs::U1FockSpace) = prod(ufs.geometry) * (min(ufs.cutoff, ufs.particle_number))
@@ -57,6 +68,24 @@ mutable struct MutableFockState <: AbstractFockState
     space::AbstractFockSpace
     iszero::Bool
 end
+
+==(s1::FockState, s2::FockState) =
+    s1.occupations == s2.occupations &&
+    s1.coefficient == s2.coefficient &&
+    s1.space == s2.space
+
+==(m1::MultipleFockState, m2::MultipleFockState) =
+    length(m1.states) == length(m2.states) &&
+    all(m1.states .== m2.states)  # element-wise equality
+
+==(z1::ZeroFockState, z2::ZeroFockState) = true
+==(z::ZeroFockState, x) = x isa ZeroFockState  # ensures symmetric equality
+
+==(s1::MutableFockState, s2::MutableFockState) =
+    s1.occupations == s2.occupations &&
+    s1.coefficient == s2.coefficient &&
+    s1.space == s2.space &&
+    s1.iszero == s2.iszero
 
 ########## 0. Pretty printing ###########
 # Single Fock state
@@ -229,6 +258,9 @@ function fock_state(fs::AbstractFockSpace, occs::Vector{Int}, coeff::Number=1. +
             error("Occupation number out of bounds")
         end
     end
+    if typeof(fs) == U1FockSpace
+        @assert sum(occs) == fs.particle_number "occupation does not match given particle number"
+    end
     
     return FockState(ntuple(i -> occs[i], length(occs)), ComplexF64(coeff), fs)
 end
@@ -241,6 +273,9 @@ function fock_state(fs::AbstractFockSpace, occs::Array, coeff::Number=1. +0im)
         if n < 0 || n > fs.cutoff
             error("Occupation number out of bounds")
         end
+    end
+    if typeof(fs) == U1FockSpace
+        @assert sum(occs) == fs.particle_number "occupation does not match given particle number"
     end
     
     return FockState(ntuple(i -> occs[i], length(occs)), ComplexF64(coeff), fs)

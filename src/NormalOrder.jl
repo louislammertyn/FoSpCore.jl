@@ -113,6 +113,7 @@ function normal_order(Os::MultipleFockOperator)
     for o in Os.terms
         new_Os += normal_order(o)
     end
+    typeof(new_Os) == ZeroFockOperator && return new_Os
     new_Os.cnumber = Os.cnumber
     return new_Os
 end
