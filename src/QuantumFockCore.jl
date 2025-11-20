@@ -4,9 +4,11 @@ using IterTools
 using Interpolations
 using SparseArrayKit
 using TensorOperations
+using VectorInterface
 
 
 include("./FockStates.jl")
+include("./MutableFockStates.jl")
 include("./FockOps.jl")
 include("./NormalOrder.jl")
 include("./LatticeGeo.jl")
@@ -24,7 +26,10 @@ export a_j, ad_j
 export norm2FS
 export  create_MFS, dot
 
-export MutableFockState, to_fock_state, reset!, reset2!, norm2FS, cleanup_FS, mul_Mutable!
+#####################################################################################################
+#####################################################################################################
+
+export MutableFockState, MultipleMutableFockState, to_fock_state, reset!, reset2!, norm2FS, cleanup_FS, mul_Mutable!
 export a_j!, ad_j!
 
 #####################################################################################################
@@ -58,6 +63,6 @@ export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 #####################################################################################################
 #####################################################################################################
 
-export ManyBodyTensor, ManyBodyTensor_init, n_body_Op, extract_n_body_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
+export ManyBodyTensor, ManyBodyTensor_init, nbody_Op, extract_nbody_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
 export transform
 end

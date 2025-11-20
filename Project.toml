@@ -12,6 +12,7 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 SparseArrayKit = "a9a3c162-d163-4c15-8926-b8794fbefed2"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
+VectorInterface = "409d34a3-91d5-4945-b6ec-7529ddf182d8"
 
 [compat]
 Interpolations = "0.16.2"
@@ -22,3 +23,4 @@ Revise = "3.8.0"
 SparseArrayKit = "0.4.1"
 StaticArrays = "1.9.13"
 TensorOperations = "5.3.1"
+VectorInterface = "0.5.0"

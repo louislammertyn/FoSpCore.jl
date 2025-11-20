@@ -61,13 +61,7 @@ end
 struct ZeroFockState <: AbstractFockState
 end
 
-# We add a seperate Mutable FockState for performance critical codes see section 6. of this file for functionalities
-mutable struct MutableFockState <: AbstractFockState
-    occupations::Vector{Int}
-    coefficient::ComplexF64
-    space::AbstractFockSpace
-    iszero::Bool
-end
+
 
 ==(s1::FockState, s2::FockState) =
     s1.occupations == s2.occupations &&
@@ -81,11 +75,6 @@ end
 ==(z1::ZeroFockState, z2::ZeroFockState) = true
 ==(z::ZeroFockState, x) = x isa ZeroFockState  # ensures symmetric equality
 
-==(s1::MutableFockState, s2::MutableFockState) =
-    s1.occupations == s2.occupations &&
-    s1.coefficient == s2.coefficient &&
-    s1.space == s2.space &&
-    s1.iszero == s2.iszero
 
 ########## 0. Pretty printing ###########
 # Single Fock state
@@ -115,12 +104,7 @@ function Base.show(io::IO, ::ZeroFockState)
     print(io, "|0⟩")
 end
 
-# MutableFockState (similar to FockState)
-function Base.show(io::IO, s::MutableFockState)
-    occ_str = join(s.occupations, ", ")
-    coeff_str = s.coefficient == 1 + 0im ? "" : string("($(s.coefficient))", " ⋅ ")
-    print(io, coeff_str * "| ", occ_str, " ⟩")
-end
+
 
 ########## 1. Basic operations ##########
 # we start with the neutral element
@@ -231,20 +215,6 @@ end
 
 LinearAlgebra.dot(ms1::MultipleFockState, ms2::MultipleFockState)::ComplexF64 = ms1 * ms2
 
-# MutableFockstate operations
-
-Base.:*(c::Number, mfs::MutableFockState) = MutableFockState(copy(mfs.occupations), c * mfs.coefficient, mfs.space, mfs.iszero)
-Base.:*(mfs::MutableFockState, c::Number) = c * mfs
-Base.:*(f::FockState, mfs::MutableFockState) = f.coefficient' * mfs.coefficient
-Base.:*(mfs::MutableFockState, f::FockState) = f.coefficient * mfs.coefficient'
-
-function mul_Mutable!(c::Number, mfs::MutableFockState) 
-    mfs.coefficient *= c
-    mfs.iszero = zero(mfs.coefficient)
-end
-function mu_Mutable!(mfs::MutableFockState, c::Number) 
-    mul_Mutable!(c, mfs)
-end
 
 ######### 2. Basic states instantiation and functionalities ########
 # Create a multi-mode basis state |n₁, n₂, ..., n_N⟩
@@ -393,69 +363,14 @@ function create_MFS(coefficients::Vector{ComplexF64}, states::Vector{AbstractFoc
 end
 
 
-################### 6. MutableFockState functionalities ###################
-function MutableFockState(fs::FockState)
-    return MutableFockState(collect(fs.occupations), fs.coefficient, fs.space, iszero(fs.coefficient))
-end
-
-function to_fock_state(mfs::MutableFockState)
-    return FockState(ntuple(i -> mfs.occupations[i], length(mfs.occupations)), mfs.coefficient, mfs.space)
-end
-
-function reset2!(state::MutableFockState, occs::NTuple{N, Int}, coeff::ComplexF64) where N
-    @inbounds for i in eachindex(occs)
-        state.occupations[i] = occs[i]
-    end
-    state.iszero= iszero(coeff)
-    state.coefficient = coeff
-    return nothing
-end
-function reset!(state::MutableFockState, occs::Vector{Int}, coeff::ComplexF64) 
-    state.occupations = occs
-    state.coefficient = coeff
-end
-
-function norm2FS(mfs::MutableFockState)
-    return abs2(mfs.coefficient)
-end
-
-cleanup_FS(mfs::MutableFockState) = mfs.coefficient == 0 ? ZeroFockState() : to_fock_state(mfs)
-
-
-function a_j!(state::MutableFockState, j::Int)
-    if j < 1 || j > length(state.occupations)
-        error("Mode $j out of bounds")
-    end
-    n = state.occupations[j]
-    if n == 0
-        state.coefficient = 0.0
-        state.iszero = true
-    else
-        state.coefficient *= sqrt(n)
-        state.occupations[j] -= 1
-    end
-end
-
-function ad_j!(state::MutableFockState, j::Int)
-    if j < 1 || j > length(state.occupations)
-        error("Mode $j out of bounds")
-    end
-    n = state.occupations[j]
-    if n + 1 > state.space.cutoff
-        state.coefficient = 0.0
-        state.iszero = true
-    else
-        state.coefficient *= sqrt(n + 1)
-        state.occupations[j] += 1
-        
-    end
-end
-
 ###################### Krylov Method functions #########################
 function rand_superpos(basis::Vector{AbstractFockState})
     n_basis = rand(ComplexF64, length(basis)) .* basis |> MultipleFockState
     norm = n_basis |> norm2FS |> sqrt
     return  n_basis * (1/norm)
 end
+
+
+
 
 end;

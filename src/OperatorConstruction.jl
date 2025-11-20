@@ -66,7 +66,7 @@ function Base.show(io::IO, ::MIME"text/plain", MBT::ManyBodyTensor)
 end
 
 """
-    n_body_Op(V::U1FockSpace, lattice::Lattice, tensor::AbstractArray{ComplexF64}, ops::Vector{Bool}) -> MultipleFockOperator
+    nbody_Op(V::U1FockSpace, lattice::Lattice, tensor::AbstractArray{ComplexF64}, ops::Vector{Bool}) -> MultipleFockOperator
 
 Constructs an N-body Fock operator from an N-body tensor.
 
@@ -79,7 +79,7 @@ Constructs an N-body Fock operator from an N-body tensor.
 # Returns
 - `MultipleFockOperator` corresponding to the tensor
 """
-function n_body_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTensor)
+function nbody_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTensor)
     N = tensor.domain + tensor.codomain
     
     tensor_geometry = size(tensor)
@@ -114,7 +114,7 @@ function n_body_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTenso
     return typeof(Op)==MultipleFockOperator ? Op : MultipleFockOperator([Op], 0)
 end
 
-function extract_n_body_tensors(O::MultipleFockOperator, lattice::Lattice)
+function extract_nbody_tensors(O::MultipleFockOperator, lattice::Lattice)
     V = O.terms[1].space
     map_v_s = lattice.sites_v
     O = normal_order(O)
@@ -151,7 +151,7 @@ function extract_n_body_tensors(O::MultipleFockOperator, lattice::Lattice)
 end
 
 function construct_Multiple_Operator(V::AbstractFockSpace, lattice::Lattice, tensors::Vector{ManyBodyTensor})
-    return sum([n_body_Op(V, lattice, t) for t in tensors])
+    return sum([nbody_Op(V, lattice, t) for t in tensors])
 end
 
 function vectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
@@ -160,7 +160,8 @@ function vectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N}
     old_tensor = M.tensor
     old_size = size(old_tensor)
     D = length(M.V.geometry)
-    old_size == (M.domain + M.codomain) && return M
+    
+    (length(old_size) == (M.domain + M.codomain)) &&  return M
 
     # Determine new tensor size
     # assume mapping contains all possible multi-indices
