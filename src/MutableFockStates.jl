@@ -25,6 +25,22 @@ function Base.show(io::IO, s::MutableFockState)
     print(io, coeff_str * "| ", occ_str, " ⟩")
 end
 
+# Single mutable Fock state
+function Base.copy(f::MutableFockState)
+    MutableFockState(
+        copy(f.occupations),   # copy the vector so it's independent
+        f.coefficient,         # primitive types are copied automatically
+        f.space,               # assume space is immutable/shared
+        f.iszero               # Bool is primitive
+    )
+end
+
+# Multiple mutable Fock states
+function Base.copy(mf::MultipleMutableFockState)
+    MultipleMutableFockState(
+        [copy(s) for s in mf.states]   # copy each MutableFockState
+    )
+end
 # MutableFockstate operations
 
 Base.:*(c::Number, mfs::MutableFockState) = MutableFockState(copy(mfs.occupations), c * mfs.coefficient, mfs.space, mfs.iszero)
@@ -93,19 +109,100 @@ function ad_j!(state::MutableFockState, j::Int)
     end
 end
 
+function a_j!(state1::MutableFockState, state2::MutableFockState, j::Int)
+    n = state2.occupations[j]
+
+    if n == 0
+        # Resulting state is zero
+        state1.coefficient = 0.0
+        state1.iszero = true
+        return state1
+    end
+
+    # Copy occupations from state2 → state1
+    @inbounds for k in eachindex(state2.occupations)
+        state1.occupations[k] = state2.occupations[k]
+    end
+
+    # Apply a_j
+    state1.occupations[j] -= 1
+    state1.coefficient = state2.coefficient * sqrt(n)
+    state1.iszero = (state1.coefficient == 0.0)
+
+    return state1
+end
+
+function ad_j!(state1::MutableFockState, state2::MutableFockState, j::Int)
+    n = state2.occupations[j]
+    cutoff = state2.space.cutoff
+
+    if n + 1 > cutoff
+        # Out of range → zero state
+        state1.coefficient = 0.0
+        state1.iszero = true
+        return state1
+    end
+
+    # Copy occupations from state2 → state1
+    @inbounds for k in eachindex(state2.occupations)
+        state1.occupations[k] = state2.occupations[k]
+    end
+
+    # Apply a_j†
+    state1.occupations[j] += 1
+    state1.coefficient = state2.coefficient * sqrt(n + 1)
+    state1.iszero = (state1.coefficient == 0.0)
+
+    return state1
+end
+
 
 ###################### VectorInterface.jl compatibility for MultipleFockState ################
 
-function LinearAlgebra.dot(x::MultipleMutableFockState, y::MultipleMutableFockState) 
-    sum = 0
-    @inbounds for i in eachindex(x.states)
-        (x.states[i].iszero && y.states[i].iszero) && continue 
-        sum += conj(x.states[i].coefficient) * y.states[i].coefficient 
+mutable struct MutableFockVector
+    basis::Dict{UInt32, UInt16}
+    vector::Vector{MutableFockState}
+end
+
+
+
+function MutableFockVector(states::Vector{MutableFockState})
+    @assert !isempty(states) "Need at least one state"
+
+    cutoff = states[1].space.cutoff   # assume identical space
+
+    basis = Dict{UInt32, UInt64}()
+    vector = Vector{MutableFockState}(undef, length(states))
+
+    @inbounds for i in eachindex(states)
+        st = states[i]
+        key = key_from_occup(UInt16.(st.occupations), UInt16(cutoff))
+        basis[key] = UInt32(i)             # store index
+        vector[i] = st             # store the state
+    end
+
+    return MutableFockVector(basis, vector)
+end
+
+function to_fock_state(v::MutableFockVector)
+    return MultipleFockState(to_fock_state.(v.vector))
+end
+
+function Base.copy(fv::MutableFockVector)
+    MutableFockVector(
+        copy(fv.basis),                    # copy the Dict so the new one is independent
+        [copy(s) for s in fv.vector]      # copy each MutableFockState
+    )
+end
+
+function LinearAlgebra.dot(x::MutableFockVector, y::MutableFockVector) 
+    sum = zero(ComplexF64)
+    @inbounds for i in values(x.basis)
+        (x.vector[i].iszero && y.vector[i].iszero) && continue 
+        sum += conj(x.vector[i].coefficient) * y.vector[i].coefficient 
     end
     return sum
 end
-
-LinearAlgebra.norm(x::MultipleFockState) = norm(x.coefficient)
 
 
 
@@ -113,8 +210,7 @@ LinearAlgebra.norm(x::MultipleFockState) = norm(x.coefficient)
 # Scalar type
 ##############################
 
-VectorInterface.scalartype(::MutableFockState) = ComplexF64
-VectorInterface.scalartype(::MultipleMutableFockState) = ComplexF64
+VectorInterface.scalartype(::MutableFockVector) = ComplexF64
 
 ##############################
 # Zero vectors
@@ -122,45 +218,42 @@ VectorInterface.scalartype(::MultipleMutableFockState) = ComplexF64
 
 
 # In-place zero for MultipleMutableFockState
-function VectorInterface.zerovector!(v::MultipleMutableFockState)
-    empty!(v.states)
-    return v
+function VectorInterface.zerovector!(x::MutableFockVector)
+    for v in x.vector
+        v.coefficient = zero(ComplexF64)
+        v.iszero = true
+    end
+    return x
 end
 
 # BangBang for container: just call in-place if mutable
-VectorInterface.zerovector!!(v::MultipleMutableFockState) = VectorInterface.zerovector!(v)
+VectorInterface.zerovector!!(v::MutableFockVector) = VectorInterface.zerovector!(v)
 
 # Out-of-place zero
-function VectorInterface.zerovector(v::MultipleMutableFockState)
-    return MultipleMutableFockState(Vector{MutableFockState}())
+function VectorInterface.zerovector(v::MutableFockVector)
+    return zerovector!(copy(v))
 end
 
 ##############################
 # Scaling
 ##############################
 
-function VectorInterface.scale!(s::MutableFockState, α)
-    s.coefficient *= α
-    s.iszero = s.coefficient == 0
-    return s
-end
-
-VectorInterface.scale!!(s::MutableFockState, α) = VectorInterface.scale!(s, α)
-VectorInterface.scale(s::MutableFockState, α) = MutableFockState(s.occupations, s.coefficient * α, s.space, s.iszero)
-
-function VectorInterface.scale!(v::MultipleMutableFockState, α)
-    for s in v.states
-        VectorInterface.scale!(s, α)
+function VectorInterface.scale!(v::MutableFockVector, α)
+    for s in v.vector
+        if s.iszero 
+            continue
+        elseif α==zero(ComplexF64)
+            s.iszero=true
+            s.coefficient = zero(ComplexF64)
+        else
+            s.coefficient *= ComplexF64(α)
+        end
     end
     return v
 end
 
-VectorInterface.scale!!(v::MultipleMutableFockState, α) = VectorInterface.scale!(v, α)
-VectorInterface.scale(v::MultipleMutableFockState, α) = MultipleMutableFockState([scale(s, α) for s in v.states])
-function VectorInterface.scale!(w::MultipleMutableFockState, v::MultipleMutableFockState, α) 
-    w.states = scale(v,α)
-    return w
-end
+VectorInterface.scale!!(s::MutableFockVector, α) = VectorInterface.scale!(s, α)
+VectorInterface.scale(s::MutableFockVector, α) = VectorInterface.scale!(copy(s), α)
 
     
 
@@ -168,31 +261,30 @@ end
 # Addition
 ##############################
 
-function VectorInterface.add!(w::MultipleMutableFockState, v::MultipleMutableFockState; α=1, β=1)
-    @assert length(w.states) == length(v.states)
-    for i in eachindex(w.states)
-        w_i, v_i = w.states[i], v.states[i]
+function VectorInterface.add!(w::MutableFockVector, v::MutableFockVector; α=1, β=1)
+    for i in eachindex(w.vector)
+        w_i, v_i = w.vector[i], v.vector[i]
         w_i.coefficient = β * w_i.coefficient + α * v_i.coefficient
-        w_i.iszero = w_i.coefficient == 0
+        w_i.iszero = (w_i.coefficient == 0)
     end
     return w
 end
 
-VectorInterface.add!!(w::MultipleMutableFockState, v::MultipleMutableFockState; α=1, β=1) =
-    VectorInterface.add!(VectorInterface.zerovector(w), v; α=α, β=β)
+VectorInterface.add!!(w::MutableFockVector, v::MutableFockVector, α=1, β=1) =
+    VectorInterface.add!(w, v; α=α, β=β)
 
-VectorInterface.add(w::MultipleMutableFockState, v::MultipleMutableFockState; α=1, β=1) =
-    VectorInterface.add!(VectorInterface.zerovector(w), v; α=α, β=β)
+VectorInterface.add(w::MutableFockVector, v::MutableFockVector, α=1, β=1) =
+    VectorInterface.add!(copy(w), v; α=α, β=β)
 
 ##############################
 # Inner product
 ##############################
 
-function VectorInterface.inner(v::MultipleMutableFockState, w::MultipleMutableFockState)
-    @assert length(v.states) == length(w.states)
+function VectorInterface.inner(v::MutableFockVector, w::MutableFockVector)
     s = zero(ComplexF64)
-    for i in eachindex(v.states)
-        s += v.states[i].coefficient * conj(w.states[i].coefficient)
+    for i in eachindex(v.vector)
+        v.vector[i].iszero && continue
+        s += v.vector[i].coefficient * conj(w.vector[i].coefficient)
     end
     return s
 end
@@ -201,6 +293,11 @@ end
 # Norm
 ##############################
 
-function VectorInterface.norm(v::MultipleMutableFockState)
-    sqrt(sum(abs2(s.coefficient) for s in v.states))
+function VectorInterface.norm(v::MutableFockVector)
+    sqrt(sum(abs2(s.coefficient) for s in v.vector))
 end
+
+
+
+
+

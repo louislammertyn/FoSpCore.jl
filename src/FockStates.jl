@@ -270,6 +270,15 @@ function cleanup_FS(mstates::MultipleFockState)
     end
 end
 
+function remove_zeros(mstates::MultipleFockState)
+    new_states = filter(s -> !(isapprox(norm(s.coefficient) , 0;atol=1e-12)), mstates.states)    
+    if length(new_states) == 1
+        return new_states[1]
+    else
+        return MultipleFockState(new_states)   
+    end
+end
+
 ########## Basic properties #########
 function checkU1(fs::FockState)
     if fs.space == UnrestrictedFockSpace
@@ -308,7 +317,7 @@ function ad_j(state::FockState, j::Int)
     end
     occs = collect(state.occupations)
     if occs[j] + 1 > state.space.cutoff
-        return ZeroFockState()
+        return fock_state(state.space, occs, 0.)
     end
     occs[j] += 1
     coeff = state.coefficient * sqrt(occs[j])
@@ -371,6 +380,139 @@ function rand_superpos(basis::Vector{AbstractFockState})
 end
 
 
+
+###################### Generating states ############################
+function all_states_U1(V::U1FockSpace) 
+    
+    N= V.particle_number
+    L = prod(V.geometry)
+    U1occs = bounded_compositions(N, L, V.cutoff)
+    states = Vector{AbstractFockState}()
+    for occ in U1occs
+        push!(states, fock_state(V, occ))
+    end
+    return states
+end
+
+function all_states_U1( V::UnrestrictedFockSpace)
+    states = []
+    ranges = ntuple(_->0:V.cutoff, prod(V.geometry))
+    U1occs = [collect(t) for t in Iterators.product(ranges...)]
+    println(U1occs)
+    for occ in U1occs
+        push!(states, fock_state(V, occ))
+    end
+    return states
+end
+
+function all_states_U1_O(V::U1FockSpace) 
+    geometry = V.geometry
+    L = prod(geometry)
+    N = V.particle_number
+
+    # initial Fock state
+    v_i = zeros(Int, L)
+    v_i[1] = N
+    fs_i = fock_state(V, v_i)
+
+    # nearest-neighbor hopping
+    T = ZeroFockOperator()
+    for i in 1:(L-1)
+        T += FockOperator(((i,true),(i+1,false)), 1., V)
+    end
+    T += dagger_FO(T)
+
+    # iterative BFS-like exploration
+    queue = [fs_i]
+    visited = Set([fs_i.occupations])
+
+    while !isempty(queue)
+        s = pop!(queue)
+        ns = T * s
+        if typeof(ns)==FockState
+            ns = MultipleFockState([ns])
+        end
+        for s_new in ns.states
+            if  !(s_new.occupations in visited)
+                push!(visited, s_new.occupations)
+                push!(queue, s_new)
+            end
+        end
+    end
+    result::Vector{AbstractFockState} = [fock_state(V, collect(occs)) for occs in visited]
+    sorted = sort(result, by=x -> Tuple(x.occupations), rev=true)
+    return sorted
+end
+
+
+function bounded_compositions(N::Int, L::Int, cutoff::Int; thread_threshold::Int=10_000)
+    cutoff += 1
+    max_i = cutoff^L  
+    nthreads = Threads.nthreads()
+    
+    if max_i < thread_threshold || Threads.nthreads() == 1
+        # ---------------- Single-threaded version ----------------
+        results = Vector{Vector{Int}}()
+        for i in 0:max_i-1
+            n = digits(i, base=cutoff)
+            if sum(n) == N && length(n) <= L
+                push!(results, reverse(n))
+            end
+        end
+    else
+        # ---------------- Multithreaded version ----------------
+        thread_results = [Vector{Vector{Int}}() for _ in 1:nthreads]
+        blocksize = ceil(Int, max_i / nthreads)
+
+        Threads.@threads for t in 1:nthreads
+            start_i = (t-1) * blocksize
+            stop_i = min(t * blocksize-1, max_i-1)
+            
+            for i in start_i:stop_i
+                n = digits(i, base=cutoff)
+                if sum(n) == N && length(n) <= L
+                    push!(thread_results[t], reverse(n))
+                end
+            end
+        end
+        results = reduce(vcat, thread_results)
+    end
+
+    # Padding & sorting (shared by both paths)
+    padded = results .|> x -> vcat(zeros(Int, L - length(x)), x)
+    sorted = sort(padded, by=x -> Tuple(x), rev=true)
+    return sorted
+end
+
+
+function basisFS(space::U1FockSpace; nodata=true, savedata=false)
+    dirpath = "./src/assets/states"
+    savename = "basis_u1_geom=$(join(space.geometry, 'x'))_cutoff=$(space.cutoff)_N=$(space.particle_number).jld2"
+    savepath = joinpath(dirpath, savename)
+
+    (nodata & !savedata) && return all_states_U1_O(space)
+    
+    # Create directory if it doesn't exist
+    if !isdir(dirpath)
+        mkpath(dirpath)
+    end
+
+    # Case 1: File exists and we want to use it
+    if isfile(savepath) && !nodata
+        data = load(savepath)
+        return data["states"]
+
+    # Case 2: File doesn't exist, but we want to save new data
+    elseif !isfile(savepath) && savedata
+        states = all_states_U1(space)
+        save(savepath, Dict("states" => states))
+        return states
+
+    # Case 3: We don’t want to use or save data (pure computation)
+    else
+        return all_states_U1_O(space)
+    end
+end
 
 
 end;

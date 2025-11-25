@@ -268,6 +268,53 @@ function apply!(Op::FockOperator, ket::MutableFockState)
     mul_Mutable!(Op.coefficient, ket)
 end    
 
+function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFockState, buf2::MutableFockState, v::MutableFockVector)
+    zerovector!(w)
+    for v in v.vector 
+        for o_term in Op.terms 
+            op_str = o_term.product
+            L = length(op_str)
+            if op_str[L][2]
+                ad_j!(buf1, v, op_str[L][1])
+            else
+                a_j!(buf1, v, op_str[L][1])
+            end
+            for i in (L-1):-1:1
+                if op_str[i][2]
+                    ad_j!(buf2, buf1, op_str[i][1])
+                else
+                    a_j!(buf2, buf1, op_str[i][1])
+                end
+                
+                buf1.occupations .= buf2.occupations                
+                buf1.coefficient = buf2.coefficient
+                buf1.iszero = buf2.iszero
+
+                if buf1.iszero
+                    break
+                end
+            end
+            if buf1.iszero
+                continue
+            else
+                idx = w.basis[key_from_occup(UInt16.(buf2.occupations), UInt16(v.space.cutoff))] 
+                w.vector[idx].coefficient += o_term.coefficient * buf2.coefficient
+            end
+        end
+    end
+end
+
+function key_from_occup(occup::Vector{UInt16}, cutoff::UInt16)::UInt32
+    key = UInt32(0)
+    factor = UInt32(1)
+    @inbounds for n in occup
+        key += UInt32(n) * factor
+        factor *= UInt32(cutoff + 1)
+    end
+    return key
+end
+
+
 
 
 end;

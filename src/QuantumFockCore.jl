@@ -21,16 +21,17 @@ include("./utils.jl")
 
 export AbstractFockSpace, U1FockSpace, UnrestrictedFockSpace,
        AbstractFockState, FockState, MultipleFockState, ZeroFockState
-export fock_state, copy, cleanup_FS, checkU1
+export fock_state, copy, cleanup_FS, remove_zeros, checkU1
 export a_j, ad_j
 export norm2FS
-export  create_MFS, dot
+export create_MFS, dot
+export all_states_U1, all_states_U1_O, bounded_compositions, basisFS
 
 #####################################################################################################
 #####################################################################################################
 
-export MutableFockState, MultipleMutableFockState, to_fock_state, reset!, reset2!, norm2FS, cleanup_FS, mul_Mutable!
-export a_j!, ad_j!
+export MutableFockState, MultipleMutableFockState, MutableFockVector, to_fock_state, reset!, reset2!, norm2FS, cleanup_FS, mul_Mutable!
+export a_j!, ad_j!, apply!, key_from_occup
 
 #####################################################################################################
 #####################################################################################################
