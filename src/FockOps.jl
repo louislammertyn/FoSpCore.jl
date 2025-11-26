@@ -268,9 +268,9 @@ function apply!(Op::FockOperator, ket::MutableFockState)
     mul_Mutable!(Op.coefficient, ket)
 end    
 
-function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFockState, buf2::MutableFockState, v::MutableFockVector)
+function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFockState, buf2::MutableFockState, V::MutableFockVector)
     zerovector!(w)
-    for v in v.vector 
+    for v in V.vector 
         for o_term in Op.terms 
             op_str = o_term.product
             L = length(op_str)
@@ -297,19 +297,20 @@ function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFoc
             if buf1.iszero
                 continue
             else
-                idx = w.basis[key_from_occup(UInt16.(buf2.occupations), UInt16(v.space.cutoff))] 
+                idx = w.basis[key_from_occup(buf2.occupations, v.space.cutoff)] 
                 w.vector[idx].coefficient += o_term.coefficient * buf2.coefficient
             end
         end
     end
 end
 
-function key_from_occup(occup::Vector{UInt16}, cutoff::UInt16)::UInt32
-    key = UInt32(0)
-    factor = UInt32(1)
+function key_from_occup(occup::Vector{UInt8}, cutoff::Int)::UInt64
+    key = UInt64(0)
+    factor = UInt64(1)
+    factor_cutoff = UInt64(cutoff + 1)
     @inbounds for n in occup
-        key += UInt32(n) * factor
-        factor *= UInt32(cutoff + 1)
+        key += UInt64(n) * factor
+        factor *= factor_cutoff
     end
     return key
 end

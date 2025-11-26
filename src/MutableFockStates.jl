@@ -1,6 +1,6 @@
 # We add a seperate Mutable FockState for performance critical codes 
 mutable struct MutableFockState <: AbstractFockState
-    occupations::Vector{Int}
+    occupations::Vector{UInt8}
     coefficient::ComplexF64
     space::AbstractFockSpace
     iszero::Bool
@@ -59,7 +59,7 @@ end
 
 ###################  MutableFockState functionalities ###################
 function MutableFockState(fs::FockState)
-    return MutableFockState(collect(fs.occupations), fs.coefficient, fs.space, iszero(fs.coefficient))
+    return MutableFockState(UInt8.(collect(fs.occupations)), fs.coefficient, fs.space, iszero(fs.coefficient))
 end
 
 function to_fock_state(mfs::MutableFockState)
@@ -68,13 +68,13 @@ end
 
 function reset2!(state::MutableFockState, occs::NTuple{N, Int}, coeff::ComplexF64) where N
     @inbounds for i in eachindex(occs)
-        state.occupations[i] = occs[i]
+        state.occupations[i] = UInt8(occs[i])
     end
     state.iszero= iszero(coeff)
     state.coefficient = coeff
     return nothing
 end
-function reset!(state::MutableFockState, occs::Vector{Int}, coeff::ComplexF64) 
+function reset!(state::MutableFockState, occs::Vector{UInt8}, coeff::ComplexF64) 
     state.occupations = occs
     state.coefficient = coeff
 end
@@ -136,7 +136,7 @@ function ad_j!(state1::MutableFockState, state2::MutableFockState, j::Int)
     n = state2.occupations[j]
     cutoff = state2.space.cutoff
 
-    if n + 1 > cutoff
+    if n == cutoff
         # Out of range → zero state
         state1.coefficient = 0.0
         state1.iszero = true
@@ -176,7 +176,7 @@ function MutableFockVector(states::Vector{MutableFockState})
 
     @inbounds for i in eachindex(states)
         st = states[i]
-        key = key_from_occup(UInt16.(st.occupations), UInt16(cutoff))
+        key = key_from_occup(UInt8.(st.occupations), cutoff)
         basis[key] = UInt32(i)             # store index
         vector[i] = st             # store the state
     end

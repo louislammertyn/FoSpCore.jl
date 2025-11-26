@@ -27,11 +27,18 @@ O = nbody_Op(V, lattice, t) + nbody_Op(V, lattice, t2)
 s = MutableFockVector(MutableFockState.(basis))
 w = Base.copy(s)
 buf1 = MutableFockState(basis[1])
+typeof(buf1)
 buf2 = MutableFockState(basis[1])
 @time apply!(O, w, buf1, buf2, s);
 
+N = length(basis)
+A = rand(ComplexF64, N, N)
+x = rand(ComplexF64, N)
 
+@time A * x;
 s2 = MultipleFockState(basis);
-@time w2 = O * s2 ;
+
+
+#@time w2 = O * s2 ;
 
 remove_zeros(w2 - to_fock_state(w))
