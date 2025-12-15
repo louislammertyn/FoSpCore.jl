@@ -1,4 +1,4 @@
-module QuantumFockCore
+module FoSpCore
 using LinearAlgebra
 using IterTools
 using Interpolations

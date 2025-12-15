@@ -1,6 +1,6 @@
 using Test
 using Revise
-using QuantumFockCore
+using FoSpCore
 # --------------------------------------------------
 # TEST 1: Multiplication of FockOperators
 # --------------------------------------------------

@@ -1,7 +1,7 @@
 using Revise
 using SparseArrayKit
 using VectorInterface
-using QuantumFockCore
+using FoSpCore
 
 
 function randn_sparse(T::Type{<:Number}, sz::Dims, p=0.5)

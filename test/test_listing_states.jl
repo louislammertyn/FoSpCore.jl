@@ -1,7 +1,7 @@
 using BenchmarkTools
 using Plots
 using Statistics
-using FockSpace
+using FoSpCore
 
 # Parameters
 N_list = 1:3

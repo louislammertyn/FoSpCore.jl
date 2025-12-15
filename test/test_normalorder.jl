@@ -1,6 +1,6 @@
 using Test
 using SparseArrayKit  # if your code depends on it
-using YourPackageName  # replace with the module containing FockOperator, MultipleFockOperator, normal_order, U1FockSpace
+using FoSpCore  # replace with the module containing FockOperator, MultipleFockOperator, normal_order, U1FockSpace
 
 # --------------------------------------------------
 # Setup Fock space and operator

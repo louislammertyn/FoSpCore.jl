@@ -1,4 +1,4 @@
-name = "QuantumFockCore"
+name = "FoSpCore"
 uuid = "c4c52a10-75be-47fa-9298-4f0d724bc661"
 version = "0.2.0"
 authors = ["Louis Lammertyn"]

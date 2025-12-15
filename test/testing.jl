@@ -1,5 +1,5 @@
 using Revise
-using FockSpace
+using FoSpCore
 
 
 O1 = FockOperator(((1, false), (1, true), (2,true), (2, true)), 2. + 1im)
