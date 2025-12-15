@@ -22,23 +22,30 @@ t = ManyBodyTensor_init(ComplexF64, V, 1,1)
 t2 =  ManyBodyTensor_init(ComplexF64, V, 2,2)
 t.tensor .= randn_sparse(ComplexF64, Tuple(repeat([16], 2)), 0.1)
 t2.tensor .= randn_sparse(ComplexF64, Tuple(repeat([16], 4)), 0.01)
-O = nbody_Op(V, lattice, t) + nbody_Op(V, lattice, t2)
-
+sp = nbody_Op(V, lattice, t) 
+tp =  nbody_Op(V, lattice, t2)
+length(tp.terms)
+O = sp + tp 
+O = O + dagger_FO(O)
+length(O.terms)
 s = MutableFockVector(MutableFockState.(basis))
 w = Base.copy(s)
 buf1 = MutableFockState(basis[1])
 typeof(buf1)
 buf2 = MutableFockState(basis[1])
-@time apply!(O, w, buf1, buf2, s);
+@time for i in 1:1
+    apply!(O, w, buf1, buf2, s);
+end
+
+add!(w, s)
 
 N = length(basis)
 A = rand(ComplexF64, N, N)
 x = rand(ComplexF64, N)
 
-@time A * x;
+
+@time for i in 1:10
+    A * x;
+end
 s2 = MultipleFockState(basis);
-
-
-#@time w2 = O * s2 ;
-
-remove_zeros(w2 - to_fock_state(w))
+w2 = MultipleFockState(basis);

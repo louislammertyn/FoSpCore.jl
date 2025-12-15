@@ -14,6 +14,7 @@ include("./NormalOrder.jl")
 include("./LatticeGeo.jl")
 include("./OperatorConstruction.jl")
 include("./utils.jl")
+include("./MatrixFree.jl")
 
 #####################################################################################################
 #####################################################################################################
@@ -66,4 +67,10 @@ export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 
 export ManyBodyTensor, ManyBodyTensor_init, nbody_Op, extract_nbody_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
 export transform
+
+#####################################################################################################
+#####################################################################################################
+
+export MatrixFreeOperator
+
 end

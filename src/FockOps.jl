@@ -297,11 +297,13 @@ function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFoc
             if buf1.iszero
                 continue
             else
-                idx = w.basis[key_from_occup(buf2.occupations, v.space.cutoff)] 
-                w.vector[idx].coefficient += o_term.coefficient * buf2.coefficient
+                idx = w.basis[key_from_occup(buf1.occupations, v.space.cutoff)] 
+                w.vector[idx].coefficient += o_term.coefficient * buf1.coefficient
+                w.vector[idx].iszero = false
             end
         end
     end
+    return w
 end
 
 function key_from_occup(occup::Vector{UInt8}, cutoff::Int)::UInt64

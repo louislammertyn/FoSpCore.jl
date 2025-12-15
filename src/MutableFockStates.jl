@@ -160,24 +160,40 @@ end
 ###################### VectorInterface.jl compatibility for MultipleFockState ################
 
 mutable struct MutableFockVector
-    basis::Dict{UInt32, UInt16}
+    basis::Dict{UInt64, UInt64}
     vector::Vector{MutableFockState}
 end
 
+# -----------------------
+# Length
+# -----------------------
+Base.length(v::MutableFockVector) = length(v.vector)
 
+Base.getindex(v::MutableFockVector, i::Int) = v.vector[i]
+Base.setindex!(v::MutableFockVector, val, i::Int) = (v.vector[i] = val)
+
+
+Base.iterate(v::MutableFockVector) = iterate(v.vector)
+Base.iterate(v::MutableFockVector, state) = iterate(v.vector, state)
+
+
+Base.copy(v::MutableFockVector) = MutableFockVector(copy(v.basis), copy(v.vector))
+Base.deepcopy(v::MutableFockVector) = MutableFockVector(deepcopy(v.basis), deepcopy(v.vector))
+
+Base.size(v::MutableFockVector) = (length(v.vector),)
 
 function MutableFockVector(states::Vector{MutableFockState})
     @assert !isempty(states) "Need at least one state"
 
     cutoff = states[1].space.cutoff   # assume identical space
 
-    basis = Dict{UInt32, UInt64}()
+    basis = Dict{UInt64, UInt64}()
     vector = Vector{MutableFockState}(undef, length(states))
 
     @inbounds for i in eachindex(states)
         st = states[i]
         key = key_from_occup(UInt8.(st.occupations), cutoff)
-        basis[key] = UInt32(i)             # store index
+        basis[key] = UInt64(i)             # store index
         vector[i] = st             # store the state
     end
 
@@ -230,15 +246,34 @@ end
 VectorInterface.zerovector!!(v::MutableFockVector) = VectorInterface.zerovector!(v)
 
 # Out-of-place zero
+function VectorInterface.zerovector(v::MutableFockVector, ::Type{S}) where S<:Number
+    return zerovector!(copy(v))
+end
+
+# In-place zero for MultipleMutableFockState
+function VectorInterface.zerovector!(v::MutableFockVector, ::Type{S}) where S<:Number
+    for v in x.vector
+        v.coefficient = zero(ComplexF64)
+        v.iszero = true
+    end
+    return x
+end
+
+# BangBang for container: just call in-place if mutable
+VectorInterface.zerovector!!(v::MutableFockVector, ::Type{S}) where S<:Number = VectorInterface.zerovector!(v)
+
+# Out-of-place zero
 function VectorInterface.zerovector(v::MutableFockVector)
     return zerovector!(copy(v))
 end
+
+
 
 ##############################
 # Scaling
 ##############################
 
-function VectorInterface.scale!(v::MutableFockVector, α)
+function VectorInterface.scale!(v::MutableFockVector, α::Number)
     for s in v.vector
         if s.iszero 
             continue
@@ -252,16 +287,43 @@ function VectorInterface.scale!(v::MutableFockVector, α)
     return v
 end
 
-VectorInterface.scale!!(s::MutableFockVector, α) = VectorInterface.scale!(s, α)
-VectorInterface.scale(s::MutableFockVector, α) = VectorInterface.scale!(copy(s), α)
+VectorInterface.scale!!(s::MutableFockVector, α::Number) = VectorInterface.scale!(s, α)
+VectorInterface.scale(s::MutableFockVector, α::Number) = VectorInterface.scale!(copy(s), α)
 
-    
+function VectorInterface.scale!(w::MutableFockVector, v::MutableFockVector, α::Number)
+    @assert length(w.vector) == length(v.vector)
+
+    for i in eachindex(v.vector)
+        s_in = v.vector[i]
+        s_out = w.vector[i]
+
+        if s_in.iszero || α == 0
+            s_out.iszero = true
+            s_out.coefficient = zero(ComplexF64)
+        else
+            s_out.iszero = false
+            s_out.coefficient = s_in.coefficient * ComplexF64(α)
+        end
+    end
+
+    return w
+end
+
+
+function VectorInterface.scale!!(w::MutableFockVector, v::MutableFockVector, α::Number)
+    return scale!(w, v, α)      # allocation-free, store in w
+end
+function VectorInterface.scale(v::MutableFockVector, α::Number)
+    return scale!!(v, α)   # same as out-of-place copy
+end
+
+
 
 ##############################
 # Addition
 ##############################
 
-function VectorInterface.add!(w::MutableFockVector, v::MutableFockVector; α=1, β=1)
+function VectorInterface.add!(w::MutableFockVector, v::MutableFockVector; α::Number=1, β::Number=1)
     for i in eachindex(w.vector)
         w_i, v_i = w.vector[i], v.vector[i]
         w_i.coefficient = β * w_i.coefficient + α * v_i.coefficient
@@ -270,10 +332,10 @@ function VectorInterface.add!(w::MutableFockVector, v::MutableFockVector; α=1, 
     return w
 end
 
-VectorInterface.add!!(w::MutableFockVector, v::MutableFockVector, α=1, β=1) =
+VectorInterface.add!!(w::MutableFockVector, v::MutableFockVector, α::Number=1, β::Number=1) =
     VectorInterface.add!(w, v; α=α, β=β)
 
-VectorInterface.add(w::MutableFockVector, v::MutableFockVector, α=1, β=1) =
+VectorInterface.add(w::MutableFockVector, v::MutableFockVector, α::Number=1, β::Number=1) =
     VectorInterface.add!(copy(w), v; α=α, β=β)
 
 ##############################
