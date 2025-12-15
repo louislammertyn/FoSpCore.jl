@@ -268,7 +268,9 @@ function apply!(Op::FockOperator, ket::MutableFockState)
     mul_Mutable!(Op.coefficient, ket)
 end    
 
-function apply!(Op::MultipleFockOperator, w::MutableFockVector, buf1::MutableFockState, buf2::MutableFockState, V::MutableFockVector)
+function apply!(Op::MultipleFockOperator, w::MutableFockVector, V::MutableFockVector)
+    buf1 = deepcopy(V.vector[1])
+    buf2 = deepcopy(V.vector[1])
     zerovector!(w)
     for v in V.vector 
         for o_term in Op.terms 
