@@ -37,10 +37,11 @@ end
     O_mf = transition_representation(O, basis);
 length(O_mf.transitions)
 sv = ones(ComplexF64, length(basis))
-wv = similar(v)
+
 end;
-@time  for i in 1:10
-    apply!(O_mf, wv, v)
+@time  for i in 1:50
+    wv = similar(sv)
+    apply!(O_mf, wv, sv)
 end
 
 w2 = [i.coefficient for i in w.vector]
