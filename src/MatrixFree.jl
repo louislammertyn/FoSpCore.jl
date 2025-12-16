@@ -1,4 +1,4 @@
-struct MatrixFreeOperator 
+struct MatrixFreeOperator <: AbstractMatrix{ComplexF64}
     transitions::Vector{Vector{Tuple{Int, ComplexF64}}}
 end
 
