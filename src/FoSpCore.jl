@@ -65,7 +65,7 @@ export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 #####################################################################################################
 #####################################################################################################
 
-export ManyBodyTensor, ManyBodyTensor_init, nbody_Op, extract_nbody_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
+export ManyBodyTensor, ManyBodyTensor_init, ManyBodyTensor_rnd, randn_sparse, nbody_Op, extract_nbody_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
 export transform
 
 #####################################################################################################

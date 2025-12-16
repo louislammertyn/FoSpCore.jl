@@ -41,6 +41,22 @@ function ManyBodyTensor_init(::Type{T}, V::AbstractFockSpace, domain::Int, codom
     return ManyBodyTensor(tensor, V, domain, codomain)
 end
 
+function ManyBodyTensor_rnd(::Type{T}, V::AbstractFockSpace, domain::Int, codomain::Int, p=0.1; v=false) where {T}
+    mbt = ManyBodyTensor_init(T, V, domain, codomain; v=v)
+    mbt.tensor .= randn_sparse(T, size(mbt), p)
+    return mbt
+end
+
+function randn_sparse(T::Type{<:Number}, sz::Dims, p=0.1)
+    a = SparseArray{T}(undef, sz)
+    for I in keys(a)
+        if rand() < p
+            a[I] = randn(T)
+        end
+    end
+    return a
+end
+
 
 
 # similar for ManyBodyTensor
