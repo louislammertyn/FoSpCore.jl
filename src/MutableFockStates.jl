@@ -200,6 +200,10 @@ function MutableFockVector(states::Vector{MutableFockState})
     return MutableFockVector(basis, vector)
 end
 
+function MutableFockVector(states::Vector{AbstractFockState})
+    return MutableFockVector(MutableFockState.(states))
+end
+
 function to_fock_state(v::MutableFockVector)
     return MultipleFockState(to_fock_state.(v.vector))
 end

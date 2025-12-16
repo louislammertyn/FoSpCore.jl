@@ -71,6 +71,6 @@ export transform
 #####################################################################################################
 #####################################################################################################
 
-export MatrixFreeOperator, transition_representation
+export MatrixFreeOperator, transition_representation, zeroMFO
 
 end
