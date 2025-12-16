@@ -177,7 +177,7 @@ Base.iterate(v::MutableFockVector) = iterate(v.vector)
 Base.iterate(v::MutableFockVector, state) = iterate(v.vector, state)
 
 
-Base.copy(v::MutableFockVector) = MutableFockVector(copy(v.basis), copy(v.vector))
+Base.copy(v::MutableFockVector) = MutableFockVector(copy(v.basis), [copy(s) for s in fv.vector])
 Base.deepcopy(v::MutableFockVector) = MutableFockVector(deepcopy(v.basis), deepcopy(v.vector))
 
 Base.size(v::MutableFockVector) = (length(v.vector),)
@@ -206,13 +206,6 @@ end
 
 function to_fock_state(v::MutableFockVector)
     return MultipleFockState(to_fock_state.(v.vector))
-end
-
-function Base.copy(fv::MutableFockVector)
-    MutableFockVector(
-        copy(fv.basis),                    # copy the Dict so the new one is independent
-        [copy(s) for s in fv.vector]      # copy each MutableFockState
-    )
 end
 
 function LinearAlgebra.dot(x::MutableFockVector, y::MutableFockVector) 
@@ -317,7 +310,7 @@ end
 function VectorInterface.scale!!(w::MutableFockVector, v::MutableFockVector, α::Number)
     return scale!(w, v, α)      # allocation-free, store in w
 end
-function VectorInterface.scale(v::MutableFockVector, α::Number)
+function VectorInterface.scale(w::MutableFockVector, v::MutableFockVector, α::Number)
     return scale!!(v, α)   # same as out-of-place copy
 end
 
