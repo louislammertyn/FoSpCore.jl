@@ -311,7 +311,7 @@ function VectorInterface.scale!!(w::MutableFockVector, v::MutableFockVector, α:
     return scale!(w, v, α)      # allocation-free, store in w
 end
 function VectorInterface.scale(w::MutableFockVector, v::MutableFockVector, α::Number)
-    return scale!!(v, α)   # same as out-of-place copy
+    return scale!!(w, v, α)   # same as out-of-place copy
 end
 
 
