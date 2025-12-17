@@ -309,14 +309,30 @@ function apply!(Op::MultipleFockOperator, w::MutableFockVector, V::MutableFockVe
 end
 
 function key_from_occup(occup::Vector{UInt8}, cutoff::Int)::UInt64
-    key = UInt64(0)
-    factor = UInt64(1)
-    factor_cutoff = UInt64(cutoff + 1)
-    @inbounds for n in occup
-        key += UInt64(n) * factor
-        factor *= factor_cutoff
+    if cutoff > 1
+
+        key = UInt64(0)
+        factor = UInt64(1)
+        factor_cutoff = UInt64(cutoff + 1)
+        @assert factor_cutoff^(length(occup)) < 2e62
+        @inbounds for n in occup
+            key += UInt64(n) * factor
+            factor *= factor_cutoff
+        end
+        return key
+    else
+        key = 0
+        particles = sum(occup)
+        M= length(occup)
+        @assert binomial(M, particles) < 2e62
+        for (i, bit) in enumerate(occup)
+            if isone(bit)
+                key += binomial(M-i, particles)
+                particles -= 1
+            end
+        end
+        return UInt64(key)
     end
-    return key
 end
 
 

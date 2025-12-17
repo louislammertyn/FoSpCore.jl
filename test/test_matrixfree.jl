@@ -4,18 +4,7 @@ using VectorInterface
 using Revise
 using FoSpCore
 
-# --------------------------
-# Utilities
-# --------------------------
-function randn_sparse(T::Type{<:Number}, sz::Dims, p=0.5)
-    a = SparseArray{T}(undef, sz)
-    for I in keys(a)
-        if rand() < p
-            a[I] = randn(T)
-        end
-    end
-    return a
-end
+
 
 # --------------------------
 # Setup
@@ -25,11 +14,9 @@ V = U1FockSpace(geometry, 2, 6)
 basis = all_states_U1(V)
 lattice = Lattice(geometry)
 
-t = ManyBodyTensor_init(ComplexF64, V, 1, 1)
-t2 = ManyBodyTensor_init(ComplexF64, V, 2, 2)
+t = ManyBodyTensor_rnd(ComplexF64, V, 1, 1, 0.1)
+t2 = ManyBodyTensor_rnd(ComplexF64, V, 2, 2, 0.01)
 
-t.tensor .= randn_sparse(ComplexF64, Tuple(repeat([16], 2)), 0.1)
-t2.tensor .= randn_sparse(ComplexF64, Tuple(repeat([16], 4)), 0.01)
 
 
 # --------------------------
@@ -71,9 +58,7 @@ t2.tensor .= randn_sparse(ComplexF64, Tuple(repeat([16], 4)), 0.01)
     w2 = [i.coefficient for i in w.vector]
     @test isapprox(norm(wv - w2), 0.0; atol=1e-10)
 
-    # --------------------------
-    # Optional timing (not part of tests)
-    # --------------------------
+    
     @info "Timing examples "
     @time for i in 1:10
         apply!(O, w, s)

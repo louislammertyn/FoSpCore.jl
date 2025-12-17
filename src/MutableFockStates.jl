@@ -177,7 +177,7 @@ Base.iterate(v::MutableFockVector) = iterate(v.vector)
 Base.iterate(v::MutableFockVector, state) = iterate(v.vector, state)
 
 
-Base.copy(v::MutableFockVector) = MutableFockVector(copy(v.basis), [copy(s) for s in fv.vector])
+Base.copy(v::MutableFockVector) = MutableFockVector(copy(v.basis), [copy(s) for s in v.vector])
 Base.deepcopy(v::MutableFockVector) = MutableFockVector(deepcopy(v.basis), deepcopy(v.vector))
 
 Base.size(v::MutableFockVector) = (length(v.vector),)
