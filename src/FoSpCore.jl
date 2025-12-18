@@ -48,6 +48,7 @@ export rand_superpos
 #####################################################################################################
 
 export AbstractFockString, SameSiteString, MultiSiteString
+export flip_bits_range, first_ann_cre_pair, remove_two_bits, remove_pair, commute_first_pair
 export commute_first!, normal_order!, _normal_order!, normal_order, commutator
 
 #####################################################################################################

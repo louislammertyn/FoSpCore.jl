@@ -1,4 +1,4 @@
-
+begin
 abstract type AbstractFockString end
 
 struct SameSiteString <: AbstractFockString
@@ -66,17 +66,6 @@ function commute_first_pair(s::SameSiteString)
     commuted = switch_pair(s, id_ann)
     return contracted, commuted
 end
-bitstring(UInt64(9))
-s = SameSiteString(UInt64(9), 5)
-for i in 1:4
-    contracted, commuted = commute_first_pair(s)
-    #println(contracted.len)
-    #println(commuted.len)
-    #println(bitstring(contracted.bits))
-    println(bitstring(commuted.bits))
-    s = commuted
-end
-first_ann_cre_pair(s)
 
 function commute_first!(ops::SameSiteString)
     indicator = true
@@ -189,3 +178,4 @@ function commutator(O1::AbstractFockOperator, O2::AbstractFockOperator)
     return normal_order(O1 * O2) - normal_order(O2 * O1)
 end
 
+end;
