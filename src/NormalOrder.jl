@@ -1,15 +1,82 @@
 
-begin
-
 abstract type AbstractFockString end
 
-mutable struct SameSiteString <: AbstractFockString
-    factors::Vector{Bool} 
+struct SameSiteString <: AbstractFockString
+    bits::UInt64 
+    len::Int
 end
 
-mutable struct MultiSiteString <: AbstractFockString
+struct MultiSiteString <: AbstractFockString
     factors::Dict{Int, SameSiteString}
 end
+
+function flip_bits_range(bits::UInt64, i::Int, j::Int)
+    # i = leftmost position to flip
+    # j = rightmost position to flip
+    @assert i <= j <= 64
+    mask = ((UInt64(1) << (j - i + 1)) - 1) << (i - 1)
+    return bits ⊻ mask
+end
+
+function first_ann_cre_pair(bits::UInt64, len::Int)::Int
+    neg_bits = flip_bits_range(bits, 1, len)
+    shifted = neg_bits >> 1
+    candidates = bits & shifted 
+    return 64 - leading_zeros(candidates) + 1
+end
+
+function remove_two_bits(bits::UInt64, len::Int, i::Int, j::Int)
+    @assert i < j <= len
+
+    # Lower part: bits below i
+    lower = bits & ((UInt64(1) << (i-1)) - 1)
+
+    # Middle part: bits between i and j
+    middle = (bits >> i) & ((UInt64(1) << (j - i - 1)) - 1)
+
+    # Upper part: bits above j
+    upper = bits >> (j)
+
+    # Combine: shift middle and upper down to fill the gaps
+    new_bits = lower | (middle << (i-1)) | (upper << (j-2))
+    new_len = len - 2
+
+    return new_bits, new_len
+end
+
+function remove_pair(s::SameSiteString, i::Int, j::Int)
+    bits, len = remove_two_bits(s.bits, s.len, i, j)
+    return SameSiteString(bits, len)
+end
+
+function first_ann_cre_pair(s::SameSiteString)
+    id_ann = first_ann_cre_pair(s.bits, s.len) 
+    id_cr = id_ann - 1
+    return id_ann, id_cr
+end
+
+function switch_pair(s::SameSiteString, id_ann::Int)
+    switched = flip_bits_range(s.bits, id_ann-1, id_ann)
+    return SameSiteString(switched, s.len)
+end
+
+function commute_first_pair(s::SameSiteString)
+    id_ann, id_cr = first_ann_cre_pair(s)
+    contracted = remove_pair(s, id_cr, id_ann)
+    commuted = switch_pair(s, id_ann)
+    return contracted, commuted
+end
+bitstring(UInt64(9))
+s = SameSiteString(UInt64(9), 5)
+for i in 1:4
+    contracted, commuted = commute_first_pair(s)
+    #println(contracted.len)
+    #println(commuted.len)
+    #println(bitstring(contracted.bits))
+    println(bitstring(commuted.bits))
+    s = commuted
+end
+first_ann_cre_pair(s)
 
 function commute_first!(ops::SameSiteString)
     indicator = true
@@ -122,4 +189,3 @@ function commutator(O1::AbstractFockOperator, O2::AbstractFockOperator)
     return normal_order(O1 * O2) - normal_order(O2 * O1)
 end
 
-end;
