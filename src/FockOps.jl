@@ -14,6 +14,13 @@ struct FockOperator <: AbstractFockOperator
     product::NTuple{N, Tuple{Int,Bool}} where N 
     coefficient::ComplexF64
     space::AbstractFockSpace
+
+    function FockOperator(prod::NTuple{N, Tuple{Int,Bool}} where N,
+                          coeff::ComplexF64,
+                          space::AbstractFockSpace)
+        canon_prod = is_canonical(prod) ? prod : canonical_sort(prod)
+        new(canon_prod, coeff, space)
+    end
 end
 
 mutable struct MultipleFockOperator <: AbstractFockOperator
@@ -28,6 +35,59 @@ end
 Base.zero(::Type{FockOperator}) = ZeroFockOperator()
 Base.zero(::Type{MultipleFockOperator}) = ZeroFockOperator()
 
+@inline function canonical_sort(prod::NTuple{N, Tuple{Int,Bool}}) where N
+    creations = filter(x -> x[2], prod)
+    annihilations = filter(x -> !x[2], prod)
+    return Tuple(vcat(sort(creations, by = x -> x[1])...,
+               sort(annihilations, by = x -> x[1])...))
+end
+
+@inline function is_canonical(Op::FockOperator)
+    return is_canonical(Op.prod)
+end
+
+@inline function is_canonical(Op::MultipleFockOperator)
+    return is_canonical.(Op.terms)
+end
+
+@inline function is_canonical(prod::NTuple{N, Tuple{Int,Bool}}) where N
+    seen_annihilation = false
+    last_mode = 0
+    for (mode, is_creation) in prod
+        if !is_creation
+            seen_annihilation = true
+        elseif seen_annihilation
+            # creation after annihilation → not canonical
+            return false
+        end
+
+        # check increasing mode within each group
+        if is_creation
+            if mode < last_mode
+                return false
+            end
+        else
+            if mode < last_mode
+                return false
+            end
+        end
+        last_mode = mode
+    end
+    return true
+end
+
+@inline function is_normal_ordered(prod::NTuple{N, Tuple{Int,Bool}}) where N
+    seen_annihilation = false
+    for (mode, is_creation) in prod
+        if !is_creation
+            seen_annihilation = true
+        elseif seen_annihilation
+            # creation after annihilation → not canonical
+            return false
+        end
+    end
+    return true
+end
 
 # empty product means identity
 
@@ -103,25 +163,28 @@ Base.size(Op::MultipleFockOperator) = size(Op.terms[1])
 Base.eltype(Op::AbstractFockOperator) = ComplexF64
 
 Base.:+(op1::FockOperator, op2::FockOperator) =
-    op1.product == op2.product ? cleanup_FO(FockOperator(op1.product, op1.coefficient + op2.coefficient, op1.space)) : MultipleFockOperator([op1, op2], 0. + 0im);
+    op1.product == op2.product ? FockOperator(op1.product, op1.coefficient + op2.coefficient, op1.space) : remove_zeros(MultipleFockOperator(FockOperator[op1, op2], 0. + 0im));
 
 Base.:-(op1::FockOperator, op2::FockOperator) = op1 + FockOperator(op2.product, -op2.coefficient, op2.space)
 
-function Base.:+(op::FockOperator, mop::MultipleFockOperator)
-    new_terms = copy(mop.terms)
-    matched = false
-    for i in eachindex(new_terms)
-        if new_terms[i].product == op.product
-            new_terms[i] = FockOperator(op.product, new_terms[i].coefficient + op.coefficient, op.space)
-            matched = true
-            break
+@inline function findterm(op::MultipleFockOperator, product)
+    for i in eachindex(op.terms)
+        if op.terms[i].product === product  # see next section
+            return i
         end
     end
-    if !matched
+    return 0
+end
+
+function Base.:+(op::FockOperator, mop::MultipleFockOperator)
+    new_terms = copy(mop.terms)
+    i = findterm(mop, op.product)
+    if i != 0
+        new_terms[i] = FockOperator(op.product, new_terms[i].coefficient + op.coefficient, op.space)
+    else
         push!(new_terms, op)
     end
-    
-    return cleanup_FO(MultipleFockOperator(new_terms, mop.cnumber))
+    return remove_zeros(MultipleFockOperator(new_terms, mop.cnumber))
 end
 
 Base.:+(mop::MultipleFockOperator, c::Number) = (mop.cnumber += c; return mop)
@@ -140,7 +203,7 @@ function Base.:+(mop1::MultipleFockOperator, mop2::MultipleFockOperator)
         result = result + t
     end
     result += mop1.cnumber
-    return cleanup_FO(result)
+    return result
 end
 
 Base.:-(mop1::MultipleFockOperator, mop2::MultipleFockOperator) = mop1 + (-1) * mop2
@@ -150,47 +213,85 @@ Base.:*(op::FockOperator, c::Number) = c * op
 
 function Base.:*(c::Number, mop::MultipleFockOperator)
     new_terms = [c * t for t in mop.terms]
-    return cleanup_FO(MultipleFockOperator(new_terms, c*mop.cnumber))
+    return MultipleFockOperator(new_terms, c*mop.cnumber)
 end
 
 Base.:*(mop::MultipleFockOperator, c::Number) = c * mop
 
 # Multiplying operators
 function Base.:*(Op1::FockOperator, Op2::FockOperator)
+    @assert Op1.space == Op2.space
     factors1 = collect(Op1.product)
     factors2 = collect(Op2.product)
-    new_factor = vcat(factors1, factors2)
-    return FockOperator(Tuple(new_factor), Op1.coefficient * Op2.coefficient, Op1.space)
+    new_factor = vcat(factors1, factors2) |> Tuple
+    return normal_order(new_factor, Op1.coefficient * Op2.coefficient, Op1.space)
 end
 
 function Base.:*(MOp::MultipleFockOperator, Op::FockOperator)
     terms = Vector{FockOperator}()
     for O in MOp.terms
-        push!(terms, O * Op)
+        O_ = O * Op
+        if typeof(O_) == FockOperator
+            push!(terms, O_)
+        else
+            push!(terms, O_.terms...)
+        end
     end
     push!(terms, Op * MOp.cnumber)
-    return MultipleFockOperator(terms, 0.)
+    return remove_zeros(MultipleFockOperator(terms, 0.))
 end
 
 function Base.:*(Op::FockOperator, MOp::MultipleFockOperator)
     terms = Vector{FockOperator}()
     for O in MOp.terms
-        push!(terms, Op * O)
+        O_ = Op * O
+        if typeof(O_) == FockOperator
+            push!(terms, O_)
+        else
+            push!(terms, O_.terms...)
+        end
     end
     push!(terms, Op * MOp.cnumber)
-    return MultipleFockOperator(terms, 0.)
+    return remove_zeros(MultipleFockOperator(terms, 0.))
 end
 
-function Base.:*(MOp1::MultipleFockOperator, MOp2::MultipleFockOperator)
-    terms = Vector{FockOperator}()
-    for O1 in MOp1.terms, O2 in MOp2.terms
-        push!(terms, O1 * O2)
-        push!(terms, O1 * MOp2.cnumber)
-        push!(terms, O2 * MOp1.cnumber)
+function Base.:*(A::MultipleFockOperator, B::MultipleFockOperator)
+    acc = Dict{NTuple{N, Tuple{Int,Bool}} where N, ComplexF64}()
+
+    # helper to accumulate any FockOperator or MultipleFockOperator
+    function add_to_acc!(O)
+        if O isa FockOperator
+            acc[O.product] = get(acc, O.product, 0.0) + O.coefficient
+        elseif O isa MultipleFockOperator
+            for t in O.terms
+                acc[t.product] = get(acc, t.product, 0.0) + t.coefficient
+            end
+        end
     end
-    
-    return MultipleFockOperator(terms, MOp1.cnumber * MOp2.cnumber)
+
+    # term × term
+    for O1 in A.terms, O2 in B.terms
+        add_to_acc!(O1 * O2)
+    end
+
+    # term × c-number
+    for O1 in A.terms
+        add_to_acc!(O1 * B.cnumber)
+    end
+    for O2 in B.terms
+        add_to_acc!(O2 * A.cnumber)
+    end
+
+    # build result
+    terms = FockOperator[]
+    for (prod, coeff) in acc
+        coeff == 0 && continue
+        push!(terms, FockOperator(prod, coeff, first(A.terms).space))
+    end
+
+    return remove_zeros(MultipleFockOperator(terms, A.cnumber * B.cnumber))
 end
+
 
 ########## Utilities ##########
 function Base.copy(op::FockOperator)
@@ -198,6 +299,15 @@ function Base.copy(op::FockOperator)
 end
 
 Base.copy(mop::MultipleFockOperator) = MultipleFockOperator(copy(mop.terms), copy(mop.cnumber))
+
+function remove_zeros(mop::MultipleFockOperator)
+    new_ops = filter(s -> !(isapprox(norm(s.coefficient) , 0;atol=1e-12)), mop.terms)    
+    if length(new_ops) == 1 && iszero(mop.cnumber) 
+        return new_ops[1]
+    else
+        return MultipleFockOperator(new_ops, mop.cnumber)   
+    end
+end
 
 function cleanup_FO(op::FockOperator)
     return op.coefficient==0. ? ZeroFockOperator() : op
@@ -335,7 +445,15 @@ function key_from_occup(occup::Vector{UInt8}, cutoff::Int)::UInt64
     end
 end
 
+## Fundamental operators ##
 
+function a(i::Int, V::AbstractFockSpace)
+    return FockOperator(((i, false),), one(ComplexF64), V)
+end
+
+function ad(i::Int, V::AbstractFockSpace)
+    return FockOperator(((i, true),), one(ComplexF64), V)
+end
 
 
 end;

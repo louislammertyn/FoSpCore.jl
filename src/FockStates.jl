@@ -44,7 +44,7 @@ import Base: ==
 dimension(ufs::U1FockSpace) = prod(ufs.geometry) * (min(ufs.cutoff, ufs.particle_number))
 dimension(ufs::UnrestrictedFockSpace) = prod(ufs.geometry) * ufs.cutoff
 
-
+single_particle_space(geometry::NTuple{D,Int}) where D = U1FockSpace(geometry, 1, 1)
 
 abstract type AbstractFockState end
 

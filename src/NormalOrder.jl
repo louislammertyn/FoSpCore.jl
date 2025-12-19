@@ -4,10 +4,19 @@ abstract type AbstractFockString end
 struct SameSiteString <: AbstractFockString
     bits::UInt64 
     len::Int
+    function SameSiteString(bits::UInt64, len::Int)
+        @assert len <= 64
+        mask = UInt64(1) << len - 1
+        new(bits & mask, len)
+    end
 end
 
 struct MultiSiteString <: AbstractFockString
     factors::Dict{Int, SameSiteString}
+end
+
+function Base.show(io::IO, s::SameSiteString)
+    print(bitstring(s.bits)[end-(s.len-1) : end] )
 end
 
 function flip_bits_range(bits::UInt64, i::Int, j::Int)
@@ -45,7 +54,7 @@ function remove_two_bits(bits::UInt64, len::Int, i::Int, j::Int)
 end
 
 function remove_pair(s::SameSiteString, i::Int, j::Int)
-    bits, len = remove_two_bits(s.bits, s.len, i, j)
+    bits, len = remove_two_bits(s.bits, s.len, min(i, j), max(i,j))
     return SameSiteString(bits, len)
 end
 
@@ -67,115 +76,107 @@ function commute_first_pair(s::SameSiteString)
     return contracted, commuted
 end
 
-function commute_first!(ops::SameSiteString)
-    indicator = true
-    for (i,a) in enumerate(ops.factors)
-        if !indicator && a
-            id_term = deepcopy(ops)
-            deleteat!(id_term.factors, [i-1,i])
-            ops.factors[i-1] = true
-            ops.factors[i] = false
-            
-            return ops, id_term
-        end
-        indicator = a
-    end
-    return ops, false
+function check_normal_ordering(s::SameSiteString)
+    bs = s.bits
+    bs_neg = flip_bits_range(bs, 0, s.len)
+    return leading_zeros(bs_neg) == 64 - count_ones(bs_neg)
 end
 
-function normal_order!(ops::SameSiteString)
-    result = Dict{Vector{Bool}, Int}()
-    _normal_order!(deepcopy(ops), result)
-    return result
-end
+function normal_order(s::SameSiteString)
+    results = Dict{SameSiteString, Int}()
+    cache = [s]
 
-function _normal_order!(ops::SameSiteString, acc::Dict{Vector{Bool}, Int})
-    # If already normal ordered (creations then annihilations), store it
-    if issorted(ops.factors; rev=true)
-        acc[ops.factors] = get(acc, ops.factors, 0) + 1
-        return nothing
-    end
-
-    # Try to commute first out-of-order pair
-    new_ops = deepcopy(ops)
-    commuted, id_term = commute_first!(new_ops)
-
-    # Recurse on commuted term
-    _normal_order!(deepcopy(commuted), acc)
-
-    # Recurse on identity term (commutator) if it exists
-    if id_term != false
-        _normal_order!(id_term, acc)
-    end
-end
-
-function normal_order(O::FockOperator)
-    c = O.coefficient
-
-    # Group operators by site
-    site_dict = Dict{Int, Vector{Bool}}()
-    for (i, b) in O.product
-        push!(get!(site_dict, i, Bool[]), b)
-    end
-
-    # Normal order each site
-    ordered_per_site = Dict{Int, Dict{Vector{Bool}, Int64}}()
-    for (site, bools) in site_dict
-        str = SameSiteString(copy(bools))
-        ordered_per_site[site] = normal_order!(str)
-    end
-
-    # Cartesian product over sites
-    sites = sort(collect(keys(ordered_per_site)))
-    site_orderings = [ordered_per_site[site] for site in sites]
-
-    # Combine all ordered strings
-    result = MultipleFockOperator([], 0)
-
-    for combination in Iterators.product(site_orderings...)
-        coeff_factor = c
-        creation_part = Tuple{Int, Bool}[]
-        annihilation_part = Tuple{Int, Bool}[]
-
-        for (site_idx, (ops_dict, site)) in enumerate(zip(combination, sites))
-            ops, count = ops_dict
-            coeff_factor *= count
-            for b in ops
-                if b
-                    push!(creation_part, (site, true))
-                else
-                    push!(annihilation_part, (site, false))
-                end
-            end
-        end
-
-        if isempty(creation_part) && isempty(annihilation_part)
-            println(coeff_factor)
-            println(result)
-            result.cnumber += coeff_factor
-            println(result)
+    while !isempty(cache)
+        current = pop!(cache)  # take last element (stack)
+        
+        if check_normal_ordering(current)
+            results[current] = get(results, current, 0) + 1
         else
-            full_ops = vcat(creation_part, annihilation_part)
-            result += FockOperator(Tuple(full_ops), coeff_factor, O.space)
+            contracted, commuted = commute_first_pair(current)      
+            push!(cache, contracted, commuted)
+        end
+        
+    end
+
+    return results     
+end
+
+
+function group_sites_to_strings(Ops::NTuple{N, Tuple{Int, Bool}}) where N
+    bits  = Dict{Int, UInt64}()
+    lens  = Dict{Int, Int}()
+
+    for j in eachindex(Ops)
+        site, is_creation = Ops[N - j+1]
+        i = get!(lens, site, 0)
+        is_creation && (bits[site] = get(bits, site, 0) | (UInt64(1) << i))
+        lens[site] = i + 1
+        
+    end
+    
+
+    return Dict(site => SameSiteString(get(bits,site,UInt64(0)), lens[site]) for site in keys(lens))
+end
+
+function expand_site(site::Int, s::SameSiteString,
+                             cre::Vector{Tuple{Int,Bool}},
+                             ann::Vector{Tuple{Int,Bool}})
+    bits = s.bits
+    len  = s.len
+    @inbounds for i in 1:len
+        if (bits >> (i-1)) & 0x1 == 1
+            push!(cre, (site, true))
+        else
+            push!(ann, (site, false))
+        end
+    end
+end
+
+
+function normal_order(O::NTuple{N,Tuple{Int, Bool}}, c::ComplexF64, V::AbstractFockSpace) where N
+    is_normal_ordered(O) && return FockOperator(O, c, V)
+
+    # 1. group operators by site → SameSiteString
+    site_strings = group_sites_to_strings(O)
+
+    # 2. normal order each site
+    ordered_per_site = Dict{Int, Dict{SameSiteString, Int}}()
+    for (site, sss) in site_strings
+        ordered_per_site[site] = normal_order(sss)
+    end
+
+    # 3. Cartesian product over sites
+    sites = sort(collect(keys(ordered_per_site)))
+    site_expansions = [ordered_per_site[s] for s in sites]
+
+    result = MultipleFockOperator([], 0)
+    for combo in Iterators.product(site_expansions...)
+        coeff = c
+        creation = Tuple{Int,Bool}[]
+        annihilation = Tuple{Int,Bool}[]
+
+        for ((sss, count), site) in zip(combo, sites)
+            coeff *= count
+            expand_site(site, sss, creation, annihilation)
+        end
+
+        if isempty(creation) && isempty(annihilation)
+            if typeof(result) == FockOperator
+                result = MultipleFockOperator([result], 0)
+            end
+            result.cnumber += coeff
+        else
+            full_ops = Tuple(vcat(creation, annihilation))
+            result += FockOperator(full_ops, coeff, V)
         end
     end
 
-    return result
-    
+    return typeof(result) == FockOperator ? result : remove_zeros(result)
 end
 
-function normal_order(Os::MultipleFockOperator)
-    new_Os = ZeroFockOperator()
-    for o in Os.terms
-        new_Os += normal_order(o)
-    end
-    typeof(new_Os) == ZeroFockOperator && return new_Os
-    new_Os.cnumber = Os.cnumber
-    return new_Os
-end
 
 function commutator(O1::AbstractFockOperator, O2::AbstractFockOperator)
-    return normal_order(O1 * O2) - normal_order(O2 * O1)
+    return O1 * O2 - O2 * O1
 end
 
 end;

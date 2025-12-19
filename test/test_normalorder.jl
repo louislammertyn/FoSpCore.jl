@@ -1,7 +1,31 @@
 using Test
-using SparseArrayKit  # if your code depends on it
-using FoSpCore  # replace with the module containing FockOperator, MultipleFockOperator, normal_order, U1FockSpace
+using SparseArrayKit 
+using Revise
+using FoSpCore  
 
+# --------------------------
+# Setup
+# --------------------------
+begin
+geometry = (11,);
+V = U1FockSpace(geometry, 2, 6)
+basis = all_states_U1(V)
+lattice = Lattice(geometry)
+
+t1_1 = ManyBodyTensor_rnd(ComplexF64, V, 1, 1, 0.1)
+t2_1 = ManyBodyTensor_rnd(ComplexF64, V, 2, 2, 0.01)
+
+t1_2 = ManyBodyTensor_rnd(ComplexF64, V, 1, 1, 0.1)
+t2_2 = ManyBodyTensor_rnd(ComplexF64, V, 2, 2, 0.01)
+
+O1 = nbody_Op(V, lattice, t1_1) + nbody_Op(V, lattice, t2_1)
+O2 = nbody_Op(V, lattice, t1_2) + nbody_Op(V, lattice, t2_2)
+
+N = (length(O1.terms) + length(O2.terms)) / 2
+end
+N^2
+@time o = commutator(O1,O2);
+o
 # --------------------------------------------------
 # Setup Fock space and operator
 # --------------------------------------------------
@@ -13,6 +37,9 @@ O = FockOperator(((1, false), (1,false), (1, true), (1,true), (2,false), (2, tru
 # --------------------------------------------------
 # Test: normal ordering
 # --------------------------------------------------
+
+f= n -> for i in 1:n; r = rand((0,1,2), 8); str = to_same_site_string(r); str2 = to_same_site_string(filter(x->x!=2, r)); @assert str.bits==str.bits;end
+f(1000)
 @testset "Normal ordering of FockOperator" begin
     result = normal_order(O)
 

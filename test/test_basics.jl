@@ -39,7 +39,7 @@ using FoSpCore
 end
 
 @testset "MultipleFockState" begin
-    u1_space = U1FockSpace(3, 2, 2)
+    u1_space = U1FockSpace((2,), 2, 2)
     fs1 = fock_state(u1_space, [1, 1])
     fs2 = fock_state(u1_space, [2, 0])
     mfs = fs1 + fs2
@@ -56,7 +56,7 @@ end
 end
 
 @testset "ZeroFockState" begin
-    u1_space = U1FockSpace(3, 2, 2)
+    u1_space = U1FockSpace((2,), 2, 2)
     fs = fock_state(u1_space, [1, 1])
     z = ZeroFockState()
 
@@ -71,7 +71,7 @@ end
 end
 
 @testset "Creation and Annihilation Operators" begin
-    space = UnrestrictedFockSpace(2, 3)
+    space = UnrestrictedFockSpace((2,), 3)
     fs = fock_state(space, [0, 2])
 
     fs_a1 = a_j(fs, 1)
@@ -90,17 +90,18 @@ end
 end
 
 @testset "Fock Operators" begin
-    op = FockOperator(((1, true), (2, false)), 1.0 + 0im)
-    mop = MultipleFockOperator([op])
+    V = U1FockSpace((3,), 2,2)
+    op = FockOperator(((1, true), (2, false)), 1.0 + 0im, V)
+    mop = MultipleFockOperator([op], 0)
 
     # Operator + Operator
-    op2 = FockOperator(((1, true), (2, false)), 2.0 + 0im)
+    op2 = FockOperator(((1, true), (2, false)), 2.0 + 0im, V)
     sumop = op + op2
     @test sumop isa FockOperator
     @test sumop.coefficient == 3.0 + 0im
 
     # Operator on FockState
-    space = UnrestrictedFockSpace(2, 2)
+    space = UnrestrictedFockSpace((2,), 2)
     state = fock_state(space, [1, 1])
     result = op * state
     @test result isa FockState || result isa ZeroFockState || result isa MultipleFockState
@@ -111,7 +112,7 @@ end
     @test op_dag.coefficient == (1.0 + 0im)'
 
     # Multiple operator acting
-    mop = MultipleFockOperator([op, FockOperator(((1,false),), 0.5+0im)])
+    mop = MultipleFockOperator([op, FockOperator(((1,false),), 0.5+0im, V)], 0)
     result = mop * state
     @test result isa AbstractFockState
 end

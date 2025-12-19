@@ -20,7 +20,7 @@ include("./MatrixFree.jl")
 #####################################################################################################
 
 
-export AbstractFockSpace, U1FockSpace, UnrestrictedFockSpace,
+export AbstractFockSpace, U1FockSpace, UnrestrictedFockSpace, single_particle_space,
        AbstractFockState, FockState, MultipleFockState, ZeroFockState
 export fock_state, copy, cleanup_FS, remove_zeros, checkU1
 export a_j, ad_j
@@ -39,7 +39,8 @@ export a_j!, ad_j!, apply!, key_from_occup
 
 
 export AbstractFockOperator, FockOperator, MultipleFockOperator, ZeroFockOperator, identity_fockoperator
-export cleanup_FO, dagger_FO
+export is_canonical, is_normal_ordered, canonical_sort, a, ad
+export cleanup_FO, dagger_FO, findterm
 export apply!, apply
 export rand_superpos
 
@@ -48,7 +49,8 @@ export rand_superpos
 #####################################################################################################
 
 export AbstractFockString, SameSiteString, MultiSiteString
-export flip_bits_range, first_ann_cre_pair, remove_two_bits, remove_pair, commute_first_pair
+export flip_bits_range, first_ann_cre_pair, remove_two_bits, remove_pair, commute_first_pair, check_normal_ordering
+export to_same_site_string, group_sites_to_strings
 export commute_first!, normal_order!, _normal_order!, normal_order, commutator
 
 #####################################################################################################
