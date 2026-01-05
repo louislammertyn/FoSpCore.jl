@@ -1,4 +1,5 @@
 using Test
+using Plots
 using SparseArrayKit 
 using Revise
 using FoSpCore  
@@ -6,8 +7,10 @@ using FoSpCore
 # --------------------------
 # Setup
 # --------------------------
-begin
-geometry = (11,);
+trms = []
+ts = []
+for L in 3:10
+geometry = (L,);
 V = U1FockSpace(geometry, 2, 6)
 basis = all_states_U1(V)
 lattice = Lattice(geometry)
@@ -22,10 +25,14 @@ O1 = nbody_Op(V, lattice, t1_1) + nbody_Op(V, lattice, t2_1)
 O2 = nbody_Op(V, lattice, t1_2) + nbody_Op(V, lattice, t2_2)
 
 N = (length(O1.terms) + length(O2.terms)) / 2
-end
-N^2
+t1 = time()
+
 @time o = commutator(O1,O2);
-o
+push!(ts,  time() - t1)
+push!(trms, N)
+end
+ts
+trms.^2
 # --------------------------------------------------
 # Setup Fock space and operator
 # --------------------------------------------------
