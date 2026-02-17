@@ -418,7 +418,7 @@ function all_states_U1_O(V::U1FockSpace)
     # nearest-neighbor hopping
     T = ZeroFockOperator()
     for i in 1:(L-1)
-        T += FockOperator(((i,true),(i+1,false)), 1., V)
+        T += FockOperator(((i,true),(i+1,false)), one(ComplexF64), V)
     end
     T += dagger_FO(T)
 

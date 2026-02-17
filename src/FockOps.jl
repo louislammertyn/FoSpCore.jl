@@ -16,10 +16,10 @@ struct FockOperator <: AbstractFockOperator
     space::AbstractFockSpace
 
     function FockOperator(prod::NTuple{N, Tuple{Int,Bool}} where N,
-                          coeff::ComplexF64,
+                          coeff::Number,
                           space::AbstractFockSpace)
         canon_prod = is_canonical(prod) ? prod : canonical_sort(prod)
-        new(canon_prod, coeff, space)
+        new(canon_prod, ComplexF64(coeff), space)
     end
 end
 
