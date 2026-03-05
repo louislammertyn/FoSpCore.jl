@@ -155,6 +155,48 @@ function Base.show(io::IO, mop::MultipleFockOperator)
     end
 end
 
+function Base.show(io::IO, op::FockOperator, lattice::Lattice)
+    str = op.coefficient == 1 + 0im ? "" : string("($(op.coefficient))", " ⋅ ")
+
+    for (site_v, is_creation) in op.product
+        site = lattice.sites_v[site_v]
+        label = length(site) == 1 ? "$(site[1])" : join(site, ",")
+        str *= is_creation ? "a†($label)" : "a($label)"
+        str *= " "
+    end
+
+    print(io, strip(str))
+end
+
+function Base.show(io::IO, mop::MultipleFockOperator, lattice::Lattice)
+    terms_empty = isempty(mop.terms)
+    has_cnumber = mop.cnumber != 0
+
+    if terms_empty && !has_cnumber
+        print(io, "0")
+        return
+    end
+
+    shown_any = false
+
+    if has_cnumber
+        str = mop.cnumber == 1+0im ? "𝟙" : "($(mop.cnumber)) ⋅ 𝟙"
+        print(io, str)
+        shown_any = true
+    end
+
+    for term in mop.terms
+        if shown_any
+            print(io, " + ")
+        end
+        show(io, term, lattice)
+        shown_any = true
+    end
+end
+
+# Convenience: print to stdout without an explicit io argument
+show_lattice(op::AbstractFockOperator, lattice::Lattice) = show(stdout, op, lattice)
+
 ########## Basic operations ##########
 Base.size(Op::FockOperator) = (prod(Op.space.geometry), prod(Op.space.geometry))
 

@@ -133,7 +133,9 @@ function expand_site(site::Int, s::SameSiteString,
 end
 
 
-function normal_order(O::NTuple{N,Tuple{Int, Bool}}, c::ComplexF64, V::AbstractFockSpace) where N
+function normal_order(o::FockOperator)
+    O = o.product; c= o.coefficient; V= o.space 
+    N = length(O)
     is_normal_ordered(O) && return FockOperator(O, c, V)
 
     # 1. group operators by site → SameSiteString
@@ -174,6 +176,14 @@ function normal_order(O::NTuple{N,Tuple{Int, Bool}}, c::ComplexF64, V::AbstractF
     return typeof(result) == FockOperator ? result : remove_zeros(result)
 end
 
+function normal_order(O::MultipleFockOperator)
+    O_n = ZeroFockOperator()
+    for o in O.terms 
+        O_n += normal_order(o)
+    end
+    O_n.cnumber += O.cnumber
+    return O_n
+end
 
 function commutator(O1::AbstractFockOperator, O2::AbstractFockOperator)
     return O1 * O2 - O2 * O1

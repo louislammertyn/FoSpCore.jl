@@ -167,3 +167,8 @@ function apply!(Op::MatrixFreeOperator, w::Vector, v::Vector)
     end
     return w 
 end
+
+function LinearAlgebra.mul!(y::AbstractVector, A::MatrixFreeOperator, x::AbstractVector)
+    apply!(A, y, x)
+    return y
+end

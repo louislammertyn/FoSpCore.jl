@@ -39,7 +39,7 @@ export a_j!, ad_j!, apply!, key_from_occup
 
 
 export AbstractFockOperator, FockOperator, MultipleFockOperator, ZeroFockOperator, identity_fockoperator
-export is_canonical, is_normal_ordered, canonical_sort, a, ad
+export is_canonical, is_normal_ordered, canonical_sort, a, ad, show_lattice
 export cleanup_FO, dagger_FO, findterm
 export apply!, apply
 export rand_superpos

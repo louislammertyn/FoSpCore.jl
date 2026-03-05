@@ -208,15 +208,18 @@ function devectorize_tensor(M::ManyBodyTensor{T,N}, lattice::Lattice) where {T,N
     # Old tensor and rank
     old_tensor = M.tensor
     D = length(M.V.geometry)  # dimension of each site
+    
+    tensor_rank = M.domain + M.codomain
+
+    # to ensure idempotent property
+    (D * tensor_rank == length(size(M.tensor))) && return M
 
     # Size for the new tensor (lattice indices)
-    tensor_rank = M.domain + M.codomain
     site_size = M.V.geometry
     new_size = repeat(collect(site_size), N) |> Tuple
     new_tensor = SparseArray{T, length(new_size)}(undef, new_size)
 
-    # to ensure idempotent property
-    (D * tensor_rank == length(size(M.tensor))) && return M
+    
 
     # Iterate over stored entries in the vectorized tensor
     for I in keys(old_tensor)
