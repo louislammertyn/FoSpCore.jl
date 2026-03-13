@@ -14,13 +14,6 @@ struct FockOperator <: AbstractFockOperator
     product::NTuple{N, Tuple{Int,Bool}} where N 
     coefficient::ComplexF64
     space::AbstractFockSpace
-
-    function FockOperator(prod::NTuple{N, Tuple{Int,Bool}} where N,
-                          coeff::Number,
-                          space::AbstractFockSpace)
-        canon_prod = is_canonical(prod) ? prod : canonical_sort(prod)
-        new(canon_prod, ComplexF64(coeff), space)
-    end
 end
 
 mutable struct MultipleFockOperator <: AbstractFockOperator
@@ -35,12 +28,22 @@ end
 Base.zero(::Type{FockOperator}) = ZeroFockOperator()
 Base.zero(::Type{MultipleFockOperator}) = ZeroFockOperator()
 
-@inline function canonical_sort(prod::NTuple{N, Tuple{Int,Bool}}) where N
+@inline function canonical_sort(O::FockOperator) 
+    prod = O.product
     creations = filter(x -> x[2], prod)
     annihilations = filter(x -> !x[2], prod)
-    return Tuple(vcat(sort(creations, by = x -> x[1])...,
+    prod = Tuple(vcat(sort(creations, by = x -> x[1])...,
                sort(annihilations, by = x -> x[1])...))
+    return FockOperator(prod, O.coefficient, O.space)
 end
+
+@inline function canonical_sort(O::MultipleFockOperator) 
+    for (i,o) in enumerate(O.terms)
+        O.terms[i] = canonical_sort(o)
+    end
+    return O
+end
+
 
 @inline function is_canonical(Op::FockOperator)
     return is_canonical(Op.prod)
@@ -116,86 +119,142 @@ Base.:*(z::ZeroFockOperator, s::FockOperator) = 0
 Base.:*(s::FockOperator, z::ZeroFockOperator) = 0
 
 ############ Pretty Printing ############
-function Base.show(io::IO, op::FockOperator)
-    str = op.coefficient == 1 + 0im ? "" : string("($(op.coefficient))", " ⋅ ")
 
-    for (site, is_creation) in op.product
-        str *= is_creation ? "a†($site)" : "a($site)"
-        str *= " "
+function format_coefficient(c::ComplexF64; sigdigits=3)
+    r = abs(real(c)) < 1e-10 ? 0.0 : round(real(c), sigdigits=sigdigits)
+    i = abs(imag(c)) < 1e-10 ? 0.0 : round(imag(c), sigdigits=sigdigits)
+
+    r == 1.0 && i == 0.0 && return ""
+    i == 0.0 && return "$(r) ⋅ "
+    r == 0.0 && return "$(i)im ⋅ "
+    return "($(r) + $(i)im) ⋅ "
+end
+
+function operator_key(term::FockOperator)
+    return Tuple([(is_creation, length(term.product)) for (_, is_creation) in term.product])
+end
+
+function print_group(io::IO, group::Vector{FockOperator}, print_term::Function; nmax=4)
+    n = length(group)
+    println(io, "  [$(n) terms]")
+    for (i, term) in enumerate(group)
+        if i == nmax÷2 + 1 && n > nmax
+            println(io, "     ⋮")
+        end
+        if i > nmax÷2 && i <= n - nmax÷2 && n > nmax
+            continue
+        end
+        print(io, "  + ")
+        print_term(io, term)
+        println(io)
     end
+end
 
+function group_terms(terms::Vector{FockOperator})
+    groups = Dict{Any, Vector{FockOperator}}()
+    order  = Vector{Any}()
+    for term in terms
+        key = operator_key(term)
+        if !haskey(groups, key)
+            groups[key] = FockOperator[]
+            push!(order, key)
+        end
+        push!(groups[key], term)
+    end
+    return order, groups
+end
+
+function print_header(io::IO, mop::MultipleFockOperator)
+    n     = length(mop.terms)
+    if n != 0
+        space = mop.terms[1].space
+        println(io, "MultipleFockOperator  ($n terms, $(typeof(space)))")
+        println(io, "─"^60)
+    else
+        println(io, "Identity Operator")
+        println(io, "─"^60)
+    end
+end
+
+function print_footer(io::IO)
+    println(io, "─"^60)
+end
+
+############ Plain show (no lattice) ############
+
+function Base.show(io::IO, op::FockOperator)
+    str = format_coefficient(op.coefficient)
+    for (site, is_creation) in op.product
+        str *= is_creation ? "a†($site) " : "a($site) "
+    end
     print(io, strip(str))
 end
 
 function Base.show(io::IO, mop::MultipleFockOperator)
-    terms_empty = isempty(mop.terms)
-    has_cnumber = mop.cnumber != 0
-
-    if terms_empty && !has_cnumber
-        print(io, "0")
-        return
+    if isempty(mop.terms) && mop.cnumber == 0
+        print(io, "0"); return
     end
 
-    shown_any = false
+    print_header(io, mop)
 
-    # print cnumber first if it exists
-    if has_cnumber
-        str = mop.cnumber == 1+0im ? "𝟙" : "($(mop.cnumber)) ⋅ 𝟙"
-        print(io, str)
-        shown_any = true
+    if mop.cnumber != 0
+        c = format_coefficient(mop.cnumber)
+        println(io, isempty(c) ? "  𝟙" : "  $(c)𝟙")
     end
 
-    # print operator terms
-    for term in mop.terms
-        if shown_any
-            print(io, " + ")
-        end
-        print(io, term)
-        shown_any = true
+    if !isempty(mop.terms)
+
+    order, groups = group_terms(mop.terms)
+    for key in order
+        println(io)
+        print_group(io, groups[key],
+            (io, term) -> show(io, term))
+    end
+
+    println(io)
+    print_footer(io)
     end
 end
 
+############ Lattice-aware show ############
+
 function Base.show(io::IO, op::FockOperator, lattice::Lattice)
-    str = op.coefficient == 1 + 0im ? "" : string("($(op.coefficient))", " ⋅ ")
-
+    str = format_coefficient(op.coefficient)
     for (site_v, is_creation) in op.product
-        site = lattice.sites_v[site_v]
+        site  = lattice.sites_v[site_v]
         label = length(site) == 1 ? "$(site[1])" : join(site, ",")
-        str *= is_creation ? "a†($label)" : "a($label)"
-        str *= " "
+        str *= is_creation ? "a†($label) " : "a($label) "
     end
-
     print(io, strip(str))
 end
 
 function Base.show(io::IO, mop::MultipleFockOperator, lattice::Lattice)
-    terms_empty = isempty(mop.terms)
-    has_cnumber = mop.cnumber != 0
-
-    if terms_empty && !has_cnumber
-        print(io, "0")
-        return
+    if isempty(mop.terms) && mop.cnumber == 0
+        print(io, "0"); return
     end
 
-    shown_any = false
+    print_header(io, mop)
 
-    if has_cnumber
-        str = mop.cnumber == 1+0im ? "𝟙" : "($(mop.cnumber)) ⋅ 𝟙"
-        print(io, str)
-        shown_any = true
+    if mop.cnumber != 0
+        c = format_coefficient(mop.cnumber)
+        println(io, isempty(c) ? "  𝟙" : "  $(c)𝟙")
     end
 
-    for term in mop.terms
-        if shown_any
-            print(io, " + ")
+    if !isempty(mop.terms)
+        order, groups = group_terms(mop.terms)
+        for key in order
+            println(io)
+            print_group(io, groups[key],
+                (io, term) -> show(io, term, lattice))
         end
-        show(io, term, lattice)
-        shown_any = true
+
+        println(io)
+        print_footer(io)
     end
 end
 
-# Convenience: print to stdout without an explicit io argument
 show_lattice(op::AbstractFockOperator, lattice::Lattice) = show(stdout, op, lattice)
+
 
 ########## Basic operations ##########
 Base.size(Op::FockOperator) = (prod(Op.space.geometry), prod(Op.space.geometry))
@@ -244,6 +303,7 @@ function Base.:+(mop1::MultipleFockOperator, mop2::MultipleFockOperator)
     for t in mop1.terms
         result = result + t
     end
+    result = cleanup_FO(result)
     result += mop1.cnumber
     return result
 end
@@ -266,7 +326,7 @@ function Base.:*(Op1::FockOperator, Op2::FockOperator)
     factors1 = collect(Op1.product)
     factors2 = collect(Op2.product)
     new_factor = vcat(factors1, factors2) |> Tuple
-    return normal_order(new_factor, Op1.coefficient * Op2.coefficient, Op1.space)
+    return FockOperator(new_factor, Op1.coefficient * Op2.coefficient, Op1.space) |> normal_order |> canonical_sort
 end
 
 function Base.:*(MOp::MultipleFockOperator, Op::FockOperator)
@@ -343,16 +403,12 @@ end
 Base.copy(mop::MultipleFockOperator) = MultipleFockOperator(copy(mop.terms), copy(mop.cnumber))
 
 function remove_zeros(mop::MultipleFockOperator)
-    new_ops = filter(s -> !(isapprox(norm(s.coefficient) , 0;atol=1e-12)), mop.terms)    
-    if length(new_ops) == 1 && iszero(mop.cnumber) 
-        return new_ops[1]
-    else
-        return MultipleFockOperator(new_ops, mop.cnumber)   
-    end
+    new_ops = filter(s -> !isapprox(norm(s.coefficient), 0; atol=1e-12), mop.terms)
+    return MultipleFockOperator(new_ops, mop.cnumber)
 end
 
 function cleanup_FO(op::FockOperator)
-    return op.coefficient==0. ? ZeroFockOperator() : op
+    return isapprox(op.coefficient,0.; atol=1e-12) ? ZeroFockOperator() : op
 end
 function cleanup_FO(mop::MultipleFockOperator)
     new_terms = filter(t -> !isapprox(abs2(t.coefficient), 0; atol=1e-15), mop.terms)

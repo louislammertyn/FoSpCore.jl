@@ -42,13 +42,12 @@ end
 
 function periodic_neighbour(s1::NTuple{D, Int}, s2::NTuple{D, Int},
                             dim::Int, lattice::Lattice, geometry::Tuple) where {D}
-    
-    nns = lattice.NN
-    !(s1 ∈ nns[s2]) && return false
 
-    δ = mod(s2[dim] - s1[dim], geometry[dim])
+    !(s1 ∈ lattice.NN[s2]) && return false
 
-    return δ == 1 
+    # a periodic bond wraps: one site is at the boundary, the other at 1
+    return (s1[dim] == geometry[dim] && s2[dim] == 1) ||
+           (s2[dim] == geometry[dim] && s1[dim] == 1)
 end
 
 

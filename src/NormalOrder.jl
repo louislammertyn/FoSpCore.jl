@@ -136,8 +136,9 @@ end
 function normal_order(o::FockOperator)
     O = o.product; c= o.coefficient; V= o.space 
     N = length(O)
-    is_normal_ordered(O) && return FockOperator(O, c, V)
 
+    is_normal_ordered(O) && return FockOperator(O, c, V)
+    
     # 1. group operators by site → SameSiteString
     site_strings = group_sites_to_strings(O)
 
@@ -157,10 +158,14 @@ function normal_order(o::FockOperator)
         creation = Tuple{Int,Bool}[]
         annihilation = Tuple{Int,Bool}[]
 
+
         for ((sss, count), site) in zip(combo, sites)
             coeff *= count
             expand_site(site, sss, creation, annihilation)
         end
+        # sort each block by site index low → high
+        sort!(creation,    by = x -> x[1])
+        sort!(annihilation, by = x -> x[1])
 
         if isempty(creation) && isempty(annihilation)
             if typeof(result) == FockOperator
@@ -169,7 +174,7 @@ function normal_order(o::FockOperator)
             result.cnumber += coeff
         else
             full_ops = Tuple(vcat(creation, annihilation))
-            result += FockOperator(full_ops, coeff, V)
+            result += MultipleFockOperator([FockOperator(full_ops, coeff, V)], 0)
         end
     end
 

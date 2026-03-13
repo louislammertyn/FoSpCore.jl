@@ -7,14 +7,14 @@ using TensorOperations
 using VectorInterface
 
 
+include("./LatticeGeo.jl")
 include("./FockStates.jl")
 include("./MutableFockStates.jl")
 include("./FockOps.jl")
 include("./NormalOrder.jl")
-include("./LatticeGeo.jl")
 include("./OperatorConstruction.jl")
-include("./utils.jl")
 include("./MatrixFree.jl")
+include("./utils.jl")
 
 #####################################################################################################
 #####################################################################################################
@@ -39,7 +39,7 @@ export a_j!, ad_j!, apply!, key_from_occup
 
 
 export AbstractFockOperator, FockOperator, MultipleFockOperator, ZeroFockOperator, identity_fockoperator
-export is_canonical, is_normal_ordered, canonical_sort, a, ad, show_lattice
+export is_canonical, is_normal_ordered, canonical_sort, a, ad, show_lattice, format_coefficient
 export cleanup_FO, dagger_FO, findterm
 export apply!, apply
 export rand_superpos
@@ -69,7 +69,7 @@ export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 #####################################################################################################
 
 export ManyBodyTensor, ManyBodyTensor_init, ManyBodyTensor_rnd, randn_sparse, nbody_Op, extract_nbody_tensors, construct_Multiple_Operator, vectorize_tensor, split_tuple, devectorize_tensor
-export transform
+export transform, nbody_Op_old
 
 #####################################################################################################
 #####################################################################################################

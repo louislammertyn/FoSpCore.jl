@@ -106,10 +106,39 @@ function nbody_Op(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTensor
     @assert all(tensor_geometry[1:D] .== V.geometry) "Tensor geometry mismatch"
     @assert all(all(tensor_geometry[1:D] .== tensor_geometry[(i-1)*D+1:i*D]) for i in 2:N) "Tensor is not N-body symmetric"
     typeof(V) == U1FockSpace && @assert tensor.domain == tensor.codomain "The tensor provided does not respect particle number conservation while U(1) symmetry is imposed!"
+
+
+    Op = ZeroFockOperator()
+    iszero(tensor.tensor) && return Op
+
+    map_s_v = lattice.sites  
+
+    for (inds, coeff) in nonzero_pairs(tensor.tensor)
+        inds_tuple = Tuple(inds)
+        # chunk into N groups of D to get site tuples, then map to vectorised Int
+        sites    = Tuple([map_s_v[inds_tuple[(i-1)*D+1:i*D] |> Tuple] for i in 1:N])
+        op_tuple = Tuple([(sites[i], i <= tensor.codomain) for i in 1:N])
+        Op += FockOperator(op_tuple, coeff, V)
+    end
+
+    return typeof(Op)==MultipleFockOperator ? Op : MultipleFockOperator([Op], 0)
+end
+
+function nbody_Op_old(V::AbstractFockSpace, lattice::Lattice, tensor::ManyBodyTensor)
+    N = tensor.domain + tensor.codomain
+
+    tensor_geometry = size(tensor)
+    D = length(tensor_geometry) ÷ N
+
+    # Sanity checks
+    @assert D * N == length(tensor_geometry) "Tensor rank mismatch"
+    @assert all(tensor_geometry[1:D] .== V.geometry) "Tensor geometry mismatch"
+    @assert all(all(tensor_geometry[1:D] .== tensor_geometry[(i-1)*D+1:i*D]) for i in 2:N) "Tensor is not N-body symmetric"
+    typeof(V) == U1FockSpace && @assert tensor.domain == tensor.codomain "The tensor provided does not respect particle number conservation while U(1) symmetry is imposed!"
     map_v_s = lattice.sites_v
     sites = collect(keys(map_v_s))
     Op = ZeroFockOperator()
-    
+
     iszero(tensor.tensor) && return Op
 
     # Generate all combinations of N sites
