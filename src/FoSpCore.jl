@@ -62,7 +62,7 @@ export Lattice_NN_h, vectorise_NN
 #####################################################################################################
 #####################################################################################################
 
-export delta, nbody_geometry, fill_nbody_tensor, make_index
+export delta, nbody_geometry, fill_nbody_tensor, make_index, Onsite_tensor_indices,  NN_tensor_indices, get_sites,get_sites_v
 export periodic_neighbour, neighbour, helical_neighbour, helical_periodic
 
 #####################################################################################################

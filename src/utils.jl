@@ -7,28 +7,67 @@ delta(i::Int,j::Int) = (i==j)
 
 make_index(site_tuple::NTuple{N, NTuple{D, Int}}) where {D,N} = site_tuple |> collect .|> collect |> s -> vcat(s...) 
 
+get_sites(latt::Lattice) = collect(keys(latt.sites))
+get_sites_v(latt::Lattice) = collect(values(latt.sites))
 
-#### Helper function to fill in ManyBodyTensor types for operator construction
-function fill_nbody_tensor(t_init::ManyBodyTensor, lattice::Lattice, fillingconditions::Tuple )
-    V = t_init.V
-    n = t_init.domain + t_init.codomain
-    
-    tensor = t_init.tensor
 
-    sites = keys(lattice.sites)
+# - Optional `canonicalize` (e.g., sort the tuple for symmetric n-body tensors)
+# - Uses a fast tolerance check with abs2(v) ≤ tol^2 to skip tiny values
+function fill_nbody_tensor(t_init::ManyBodyTensor,
+                           lattice::Lattice,
+                           fillingconditions::Tuple;
+                           support=nothing)
 
-    for s_tuple in product(ntuple(_->sites, n)...)
-        for f in fillingconditions
-            value = f(s_tuple)
-            isapprox(value, 0. +0im; atol=1e-5) && continue
+    V       = t_init.V
+    n       = t_init.domain + t_init.codomain
+    tensor  = t_init.tensor
+    T       = eltype(tensor)
 
-            ind = make_index(s_tuple)
-
-            tensor[ind...] = value 
-        end
+    # Default support: full Cartesian product over sites
+    # (collect keys once for consistent, stable iteration order)
+    if support === nothing
+        sites = collect(keys(lattice.sites))
+        support = Base.Iterators.product(ntuple(_ -> sites, n)...)
     end
+
+    # Iterate the chosen support
+    for idx in support
+        # Accumulate contributions from all fillingconditions
+        acc = zero(T)
+        @inbounds for f in fillingconditions
+            v = f(idx_tuple)           
+            acc += v
+        end
+        
+        ind = make_index(idx_tuple)         
+        # Sum into any existing value at this index
+        tensor[ind...] += acc
+        
+    end
+
     return t_init
 end
+
+####### Different helpers that create common lists of indices involved in typical Operator terms #####
+
+
+###### Onsite tensor index list ######
+function Onsite_tensor_indices(latt::Lattice, n::Int)
+    sites = get_sites(latt)  
+    return ( ntuple(_ -> s, n) for s in sites )
+end
+
+
+
+###### Nearest-neighbor tensor index list ######
+function NN_tensor_indices(latt::Lattice)
+    sites = get_sites(latt)                           
+    neighbours = latt.NN 
+    return ((s, n) for s in sites, n in neighbours)
+end
+
+    
+
 
 ####### different conditions for periodic boundary conditions on NN hopping #######
 
